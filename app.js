@@ -352,6 +352,54 @@
     render();
   });
 
+  // ---------- This month screen
+  var monthOffset = 0;
+  var MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  SCREENS.month = function (root, p) {
+    var idx = p.y * 12 + (p.m - 1) + monthOffset;
+    var ym = Math.floor(idx / 12) + "-" + SR.pad(idx % 12 + 1);
+    var t = SR.topicsFor(ym);
+    var title = MONTH_NAMES[idx % 12] + " " + Math.floor(idx / 12);
+    var html = '<div class="month-nav"><button type="button" class="btn small" data-month="-1" aria-label="Previous month">‹</button>' +
+      "<h2>" + esc(title) + (monthOffset === 0 ? ' <span class="small muted">(this month)</span>' : "") + "</h2>" +
+      '<button type="button" class="btn small" data-month="1" aria-label="Next month">›</button></div>';
+    if (monthOffset !== 0) html += '<div class="btn-row"><button type="button" class="btn small ghost" data-month="0">Back to this month</button></div>';
+
+    if (t.phase0) {
+      html += '<article class="card"><h3>Phase 0</h3><p>' + esc(t.text) + "</p>" +
+        '<p class="small muted">The roadmap topics start in October 2026. Use the First 30 days list on the Today screen.</p></article>';
+      root.innerHTML = html;
+      return;
+    }
+    if (t.reused) html += '<p class="small muted">Showing the April 2028 plan (it carries on until the roadmap ends).</p>';
+
+    var e = t.entry;
+    html += '<article class="card"><div class="card-head"><h3>LeetCode target</h3></div>' +
+      '<div class="lc-target">' + esc(e.lc) + ' <span class="small muted">problems solved in total by month end</span></div></article>';
+
+    html += '<article class="card"><h3>Topics by lane</h3><div class="topic-list">';
+    D.TOPIC_LANES.forEach(function (l) {
+      var v = e[l];
+      html += '<div class="topic lane-' + l + '">' + chip(l) + "<p>" + esc(v && v !== "—" ? v : "— (nothing new this month)") + "</p></div>";
+    });
+    html += "</div></article>";
+
+    var doneMap = state.monthDone[ym] || {};
+    html += '<article class="card"><h3>Done when</h3>';
+    if (!e.done.length) html += '<p class="small muted">No checkpoint for this month.</p>';
+    else {
+      html += '<ul class="checklist">' + e.done.map(function (txt, i) {
+        var c = !!doneMap[i];
+        return '<li><label><input type="checkbox" data-mdone="' + ym + "|" + i + '"' + (c ? " checked" : "") + '><span class="' + (c ? "done-text" : "") + '">' + esc(txt) + "</span></label></li>";
+      }).join("") + "</ul>";
+      var n = e.done.filter(function (_, i) { return doneMap[i]; }).length;
+      html += '<p class="small muted">' + n + " of " + e.done.length + " done</p>";
+    }
+    html += "</article>";
+    root.innerHTML = html;
+  };
+
   // Filled in by later sections.
   function streakHtml() { return ""; }
   function first30Html() { return ""; }
@@ -370,6 +418,12 @@
     if (e) { openEditor(e.dataset.edit); return; }
     var a = ev.target.closest("[data-add]");
     if (a) { openEditor(null, +a.dataset.add); return; }
+    var mo = ev.target.closest("[data-month]");
+    if (mo) {
+      monthOffset = +mo.dataset.month === 0 ? 0 : monthOffset + (+mo.dataset.month);
+      render();
+      return;
+    }
     var m = ev.target.closest("[data-mode]");
     if (m) {
       var r = dayRec(now().dateStr);
@@ -382,6 +436,12 @@
     var t = ev.target;
     if (t.matches("[data-check]")) {
       setDone(now().dateStr, t.dataset.check, t.checked);
+      render();
+    } else if (t.matches("[data-mdone]")) {
+      var parts = t.dataset.mdone.split("|");
+      if (!state.monthDone[parts[0]]) state.monthDone[parts[0]] = {};
+      if (t.checked) state.monthDone[parts[0]][parts[1]] = true; else delete state.monthDone[parts[0]][parts[1]];
+      save();
       render();
     } else if (t.id === "plan-start" && SR.isTime(t.value)) {
       state.plans[modeFor(now().dateStr)].start = t.value;
