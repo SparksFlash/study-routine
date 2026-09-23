@@ -1,5 +1,7 @@
 # Study Routine
 
+**Live app: https://sparksflash.github.io/study-routine/**
+
 A small web app for your phone and laptop. It shows what you should be doing right now, today's timeline, a weekly timetable, and this month's roadmap topics. It also tracks your streak and exports your routine to Google Calendar.
 
 - Plain HTML, CSS and JavaScript. There is no build step and no server.
@@ -46,7 +48,7 @@ Then open <http://localhost:8000> in your browser. Press `Ctrl+C` in the termina
 
 The project is already a Git repository with all the work committed. You only need to create an empty repository on GitHub, push to it, and turn on Pages.
 
-In these steps, replace `YOUR-USERNAME` with your GitHub username.
+Already done for this project: it's live at https://sparksflash.github.io/study-routine/. These steps are here in case you ever need to set it up again.
 
 ### Step A: Create an empty repository on GitHub
 
@@ -61,7 +63,7 @@ In these steps, replace `YOUR-USERNAME` with your GitHub username.
 Open a terminal in this folder and run:
 
 ```
-git remote add origin https://github.com/YOUR-USERNAME/study-routine.git
+git remote add origin https://github.com/SparksFlash/study-routine.git
 git push -u origin main
 ```
 
@@ -75,7 +77,7 @@ If the push is refused with a message about `workflow` scope, run `gh auth refre
 4. Click the **Actions** tab at the top of the repository. You'll see the "Deploy to GitHub Pages" workflow running. It runs the tests first and then publishes. If it already ran and failed because Pages wasn't turned on yet, click the run, then **Re-run all jobs**.
 5. After a minute or two, the run turns green ✓. Your app is at:
 
-   **https://YOUR-USERNAME.github.io/study-routine/**
+   **https://sparksflash.github.io/study-routine/**
 
 From then on, every `git push` republishes the app automatically.
 
@@ -83,7 +85,7 @@ From then on, every `git push` republishes the app automatically.
 
 ## 3. Install it on your Android phone
 
-1. Open **https://YOUR-USERNAME.github.io/study-routine/** in **Chrome** on your phone.
+1. Open **https://sparksflash.github.io/study-routine/** in **Chrome** on your phone.
 2. Tap the **⋮** menu (top right).
 3. Tap **Add to Home screen**, then choose **Install**. On some phones this item is called **Install app**.
 4. The **Routine** icon appears on your home screen. It opens full-screen and works offline.
