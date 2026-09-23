@@ -418,9 +418,46 @@
       }).join("") + "</ul></article>";
   }
 
-  // Filled in by later sections.
-  function streakHtml() { return ""; }
-  function heatmapHtml() { return ""; }
+  // ---------- streak, never-skip badges, heatmap
+  function streakHtml(p) {
+    var st = SR.streaks(state, p.dateStr);
+    var score = SR.dayScore(state, p.dateStr);
+    var mode = modeFor(p.dateStr);
+    var blocks = SR.blocksForDay(state, p.dow, mode);
+    function doneWhere(fn) { return blocks.some(function (b) { return fn(b) && isDone(p.dateStr, b.id); }); }
+    var badges = [
+      ["Walk", doneWhere(function (b) { return b.tag === "walk"; })],
+      ["DSA", doneWhere(function (b) { return b.lane === "dsa"; })],
+      ["IELTS", doneWhere(function (b) { return b.lane === "ielts"; })],
+      ["Shutdown", doneWhere(function (b) { return b.tag === "shutdown" || (b.plan && b.lane === "routine"); })],
+      ["Sleep", doneWhere(function (b) { return b.tag === "sleep"; })]
+    ];
+    return '<article class="card"><div class="stats">' +
+      '<div class="stat"><div class="n">' + st.current + '</div><div class="l">Current streak (days)</div></div>' +
+      '<div class="stat"><div class="n">' + st.longest + '</div><div class="l">Longest streak</div></div>' +
+      '<div class="stat"><div class="n">' + Math.round(score.ratio * 100) + '%</div><div class="l">Today' + (score.qualifies ? " ✓" : " (70% counts)") + "</div></div>" +
+      "</div>" +
+      '<div><p class="small muted">Never skip</p><div class="badges">' + badges.map(function (b) {
+        return '<span class="badge' + (b[1] ? " ok" : "") + '">' + (b[1] ? "✓ " : "○ ") + b[0] + "</span>";
+      }).join("") + "</div></div></article>";
+  }
+
+  function heatmapHtml(p) {
+    var thisSunday = SR.addDays(p.dateStr, -p.dow);
+    var start = SR.addDays(thisSunday, -7 * 11);
+    var cells = "";
+    for (var i = 0; i < 84; i++) {
+      var d = SR.addDays(start, i);
+      if (d > p.dateStr) { cells += '<span class="cell future" aria-hidden="true"></span>'; continue; }
+      var sc = SR.dayScore(state, d);
+      var lvl = sc.qualifies ? 4 : sc.ratio >= 0.5 ? 3 : sc.ratio >= 0.25 ? 2 : sc.ratio > 0 ? 1 : 0;
+      cells += '<span class="cell l' + lvl + (d === p.dateStr ? " today" : "") + '" title="' + d + ": " + Math.round(sc.ratio * 100) + '%"></span>';
+    }
+    return '<article class="card"><div class="card-head"><h3>Last 12 weeks</h3>' +
+      '<span class="legend tiny muted">less <span class="cell" style="background:var(--heat-0)"></span><span class="cell" style="background:var(--heat-1)"></span>' +
+      '<span class="cell" style="background:var(--heat-2)"></span><span class="cell" style="background:var(--heat-3)"></span><span class="cell" style="background:var(--heat-4)"></span> streak day</span></div>' +
+      '<div class="heatmap" role="img" aria-label="Daily completion for the last 12 weeks, rows Sunday to Saturday">' + cells + "</div></article>";
+  }
 
   // ---------- events
   document.addEventListener("click", function (ev) {
