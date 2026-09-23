@@ -2,7 +2,7 @@
  * Network first (so a new deploy shows up right away), cached copy when offline.
  * Bump VERSION when the list of files changes.
  */
-var VERSION = "v3";
+var VERSION = "v4";
 var CACHE = "study-routine-" + VERSION;
 var FILES = [
   "./",

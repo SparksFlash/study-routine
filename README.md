@@ -165,10 +165,10 @@ Importing **replaces** everything on that device, including routine edits, ticks
 ### Looks, mascot and Trophy Road
 
 - **Two themes** (Settings → Look): **Arena** is a bold, game-style look and the default. **Classic** is the clean light/dark look, which follows your phone's dark-mode setting.
-- **3D mascot** on the Now screen. It wears a different outfit for each lane, for example a sword for DSA, headphones for IELTS and a hard hat for Project. It has pyjamas and a nightcap at sleep time. Tap it to make it jump and talk; drag it sideways to spin it. On a computer, it turns its head to follow your mouse. You can turn it off in Settings to save battery. It doesn't appear when you open `index.html` by double-clicking, because the browser blocks the 3D file there. Use the online link or `python -m http.server`.
+- **3D mascot** on the Now screen: a street brawler with a cap, tank top, suspenders, rolled shorts and high-tops, standing with fists on hips. The cap, wristbands and sneaker stripes take the colour of the lane you're in. At sleep time it wears a nightcap and closes its eyes. Tap it to make it jump and talk; drag it sideways to spin it. On a computer, it turns its head to follow your mouse. You can turn it off in Settings to save battery. It doesn't appear when you open `index.html` by double-clicking, because the browser blocks the 3D file there. Use the online link or `python -m http.server`.
 - **Trophy Road** (Today screen): your best streak unlocks mascot upgrades: Star badge (3 days), Gold gear (7), Crown (14), Power aura (30), Blazing aura (60) and Diamond orbit (100).
 - **Celebrations:** confetti and a mascot jump when you mark the current block done. A bigger burst plays when the day reaches 70% and counts toward your streak. On Android, ticking a box gives a short vibration.
-- The characters and art are original, drawn in code. The app doesn't use any images, models or names from a commercial game.
+- The character is an original design drawn in code. The app doesn't use any images, models or names from a commercial game.
 
 ### Phone and computer
 

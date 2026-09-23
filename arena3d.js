@@ -1,5 +1,5 @@
 /* Arena mascots — original low-poly cartoon characters drawn with Three.js.
- * One mascot per lane (outfit + prop), upgraded by Trophy Road skins.
+ * One "street brawler" mascot wearing the current lane's colour, upgraded by Trophy Road skins.
  * Loaded on demand by app.js, only when the Arena theme and 3D are switched on.
  */
 import * as THREE from "./vendor/three.module.min.js";
@@ -11,7 +11,6 @@ const LANE = {
 const SKIN_TONE = "#f7c59a";
 const INK = "#141a33";
 const GOLD = "#ffc933";
-const STEEL = "#cfd8e6";
 
 // ---------- materials
 
@@ -71,222 +70,161 @@ function starShape(outer, inner) {
   return s;
 }
 
-// ---------- character
+// ---------- character: "Street brawler" — cap, tank top, suspenders, rolled shorts, high-tops, fists on hips.
+// Original design; the lane colour shows on the cap, wristbands and sneaker stripes.
 
 function buildCharacter(kit, lane, skin, mood) {
   const color = LANE[lane] || LANE.routine;
-  const metal = skin.gold ? GOLD : STEEL;
+  const sleeping = mood === "sleep";
   const root = new THREE.Group();   // drag rotation
   const body = new THREE.Group();   // bob / jump
   root.add(body);
   const parts = { root, body };
+  const put = (obj, x, y, z, parent) => { obj.position.set(x, y, z); parent.add(obj); return obj; };
 
-  // legs + shoes
-  const pants = kit.mat(darken(color, 0.55));
-  const shoe = kit.mat(INK);
-  [-0.22, 0.22].forEach((x) => {
-    const leg = kit.mesh(new THREE.CapsuleGeometry(0.16, 0.22, 4, 12), pants);
-    leg.position.set(x, 0.36, 0);
-    body.add(leg);
-    const foot = kit.mesh(new THREE.SphereGeometry(0.2, 16, 12), shoe, 1.1);
-    foot.scale.set(1, 0.6, 1.35);
-    foot.position.set(x, 0.1, 0.06);
-    body.add(foot);
+  const skinMat = kit.mat(SKIN_TONE);
+  const shorts = kit.mat("#7d8a4e");          // olive cargo shorts
+  const cuff = kit.mat("#687440");
+  const tank = kit.mat("#f5f5f2");
+  const strap = kit.mat(skin.gold ? GOLD : "#22284a");
+  const laneMat = kit.mat(color);
+  const white = kit.mat("#ffffff");
+
+  // ---------- legs: shorts, rolled cuffs, shins, socks, chunky high-tops
+  [-1, 1].forEach((side) => {
+    const x = side * 0.23;
+    put(kit.mesh(new THREE.CylinderGeometry(0.22, 0.24, 0.34, 18), shorts), x, 0.64, 0, body);
+    const roll = kit.mesh(new THREE.TorusGeometry(0.22, 0.06, 10, 22), cuff, 1.06);
+    roll.rotation.x = Math.PI / 2;
+    put(roll, x, 0.47, 0, body);
+    put(kit.mesh(new THREE.CapsuleGeometry(0.12, 0.14, 4, 12), skinMat), x, 0.36, 0, body);
+    put(kit.mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.12, 16), white, 1.06), x, 0.23, 0, body);
+    const shoe = kit.mesh(new THREE.SphereGeometry(0.22, 18, 14), kit.mat("#f2f2f2"), 1.08);
+    shoe.scale.set(0.95, 0.72, 1.35);
+    put(shoe, x, 0.12, 0.05, body);
+    const stripe = kit.mesh(new THREE.TorusGeometry(0.2, 0.035, 8, 22), laneMat, 1.1);
+    stripe.rotation.x = Math.PI / 2;
+    stripe.scale.set(1, 1.3, 1);
+    put(stripe, x, 0.16, 0.05, body);
+    const sole = kit.mesh(new THREE.BoxGeometry(0.34, 0.07, 0.56), kit.mat("#2a2f45"), 1.06);
+    put(sole, x, 0.02, 0.07, body);
   });
 
-  // torso + chest plate
-  const torso = kit.mesh(new THREE.CapsuleGeometry(0.5, 0.32, 6, 20), kit.mat(color));
-  torso.position.y = 0.98;
-  body.add(torso);
-  const plate = kit.mesh(new THREE.SphereGeometry(0.34, 20, 14), kit.mat(lighten(color, 0.5)), 1.06);
-  plate.scale.set(1, 0.85, 0.35);
-  plate.position.set(0, 1.0, 0.4);
-  body.add(plate);
-  if (skin.gold) {
-    const belt = kit.mesh(new THREE.TorusGeometry(0.5, 0.06, 10, 32), kit.mat(GOLD), 1.1);
-    belt.rotation.x = Math.PI / 2;
-    belt.position.y = 0.72;
-    body.add(belt);
-  }
+  // ---------- torso: tank top + shorts waist + suspenders
+  put(kit.mesh(new THREE.CapsuleGeometry(0.47, 0.3, 6, 20), tank), 0, 1.05, 0, body);
+  put(kit.mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.3, 24), shorts, 1.05), 0, 0.8, 0, body);
+  [-1, 1].forEach((side) => {
+    const front = kit.mesh(new THREE.BoxGeometry(0.09, 0.62, 0.05), strap, 1.12);
+    front.rotation.z = side * 0.12;
+    put(front, side * 0.2, 1.14, 0.44, body);
+    const back = kit.mesh(new THREE.BoxGeometry(0.09, 0.62, 0.05), strap, 1.12);
+    back.rotation.z = -side * 0.12;
+    put(back, side * 0.2, 1.14, -0.44, body);
+    put(kit.mesh(new THREE.SphereGeometry(0.05, 10, 8), kit.mat(skin.gold ? "#fff3b0" : GOLD), 1.2), side * 0.23, 0.9, 0.49, body);
+  });
 
-  // arms (pivot at shoulder) + hands
-  const sleeve = kit.mat(color);
-  const hand = kit.mat(SKIN_TONE);
+  // ---------- arms: bare, bent, fists on hips (pivot at shoulder, elbow bend inward)
   parts.arms = [-1, 1].map((side) => {
     const pivot = new THREE.Group();
-    pivot.position.set(side * 0.58, 1.28, 0);
-    const arm = kit.mesh(new THREE.CapsuleGeometry(0.13, 0.32, 4, 12), sleeve);
-    arm.position.y = -0.26;
-    pivot.add(arm);
-    const h = kit.mesh(new THREE.SphereGeometry(0.15, 16, 12), hand);
-    h.position.y = -0.55;
-    pivot.add(h);
-    pivot.rotation.z = side * 0.28;
+    pivot.position.set(side * 0.52, 1.36, 0.02);
+    pivot.rotation.z = side * 0.72;
+    pivot.userData.base = pivot.rotation.z;
+    put(kit.mesh(new THREE.SphereGeometry(0.15, 14, 12), skinMat), 0, 0, 0, pivot); // shoulder
+    put(kit.mesh(new THREE.CapsuleGeometry(0.12, 0.26, 4, 12), skinMat), 0, -0.2, 0, pivot);
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.4;
+    elbow.rotation.z = -side * 1.62;
+    pivot.add(elbow);
+    put(kit.mesh(new THREE.CapsuleGeometry(0.11, 0.24, 4, 12), skinMat), 0, -0.18, 0.02, elbow);
+    const band = kit.mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.1, 16), laneMat, 1.1);
+    put(band, 0, -0.3, 0.02, elbow);
+    put(kit.mesh(new THREE.SphereGeometry(0.15, 16, 12), skinMat), 0, -0.4, 0.04, elbow); // fist
     body.add(pivot);
     return pivot;
   });
-  const rightHand = new THREE.Group();
-  rightHand.position.y = -0.55;
-  parts.arms[1].add(rightHand);
 
-  // head
+  // ---------- head
   const head = new THREE.Group();
-  head.position.y = 1.86;
+  head.position.y = 1.95;
   body.add(head);
   parts.head = head;
-  head.add(kit.mesh(new THREE.SphereGeometry(0.56, 32, 24), kit.mat(SKIN_TONE), 1.06));
+  put(kit.mesh(new THREE.SphereGeometry(0.55, 32, 24), skinMat, 1.06), 0, 0, 0, head);
+  // ears
+  [-1, 1].forEach((side) => put(kit.mesh(new THREE.SphereGeometry(0.1, 12, 10), skinMat, 1.1), side * 0.54, -0.02, 0, head));
+  // short dark hair showing under the cap at the sides and back
+  const hairMat = kit.mat("#2b1d17");
+  const hair = kit.mesh(new THREE.SphereGeometry(0.575, 24, 16, Math.PI * 0.72, Math.PI * 1.56, 0.5, 1.05), hairMat, 1.03);
+  put(hair, 0, 0.02, 0, head);
+  [-1, 1].forEach((side) => {
+    const tuft = kit.mesh(new THREE.ConeGeometry(0.1, 0.24, 8), hairMat, 1.1);
+    tuft.rotation.z = side * 2.2;
+    put(tuft, side * 0.5, 0.18, 0.12, head);
+  });
 
-  // eyes (group scaled for blinking), brows, mouth
+  // eyes: big dark ovals with a white glint (group scaled for blinking)
   const eyes = new THREE.Group();
   head.add(eyes);
   parts.eyes = eyes;
-  const white = kit.mat("#ffffff");
-  const pupil = kit.mat(INK);
   [-0.2, 0.2].forEach((x) => {
-    const eye = kit.mesh(new THREE.SphereGeometry(0.15, 20, 16), white, 1.12);
-    eye.scale.set(0.9, 1.1, 0.55);
-    eye.position.set(x, 0.06, 0.47);
-    eyes.add(eye);
-    const p = new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12), pupil);
-    kit.owned.push(p.geometry);
-    p.position.set(x + (x < 0 ? 0.015 : -0.015), 0.05, 0.55);
-    eyes.add(p);
+    const eye = kit.mesh(new THREE.SphereGeometry(0.1, 18, 14), kit.mat("#16121f"), 1.14);
+    eye.scale.set(0.85, 1.25, 0.5);
+    put(eye, x, 0.05, 0.49, eyes);
+    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), kit.glow("#ffffff"));
+    kit.owned.push(glint.geometry);
+    put(glint, x + 0.03, 0.1, 0.54, eyes);
   });
-  if (mood === "sleep") eyes.scale.y = 0.08;
-  const browMat = kit.mat(INK);
+  if (sleeping) eyes.scale.y = 0.08;
+
+  // confident brows: thick, angled down toward the nose
+  const browMat = kit.mat("#2b1d17");
   [-1, 1].forEach((side) => {
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.05), browMat);
-    kit.owned.push(brow.geometry);
-    brow.position.set(side * 0.2, 0.27, 0.48);
-    brow.rotation.z = side * (mood === "sleep" ? 0.05 : -0.22);
-    head.add(brow);
+    const brow = kit.mesh(new THREE.BoxGeometry(0.2, 0.06, 0.05), browMat, 1.1);
+    brow.rotation.z = sleeping ? side * 0.05 : side * 0.3;
+    put(brow, side * 0.21, 0.24, 0.5, head);
   });
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.03, 8, 20, Math.PI), kit.mat("#7a2331"));
-  kit.owned.push(mouth.geometry);
-  mouth.rotation.z = Math.PI;
-  mouth.position.set(0, -0.17, 0.52);
-  if (mood === "sleep") mouth.scale.set(0.5, 0.4, 1);
-  head.add(mouth);
 
-  let hatTop = 0.56; // where a crown sits
-  const put = (obj, x, y, z, parent = head) => { obj.position.set(x, y, z); parent.add(obj); return obj; };
-  const hair = (c) => {
-    const h = kit.mesh(new THREE.SphereGeometry(0.58, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2.3), kit.mat(c), 1.04);
-    h.rotation.x = -0.25;
-    return put(h, 0, 0.04, -0.04);
-  };
-
-  // ---------- lane outfits
-  if (mood === "sleep") {
-    const cap = kit.mesh(new THREE.ConeGeometry(0.5, 0.8, 24), kit.mat("#4c5bd4"));
-    cap.rotation.z = -0.5;
-    put(cap, 0.12, 0.62, 0);
-    put(kit.mesh(new THREE.SphereGeometry(0.12, 12, 10), kit.mat("#ffffff")), 0.47, 0.9, 0);
-    hatTop = 1.0;
-  } else if (lane === "ai") {
-    hair("#2a3550");
-    const stem = kit.mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 8), kit.mat(metal), 1.3);
-    put(stem, 0, 0.72, 0);
-    put(kit.mesh(new THREE.SphereGeometry(0.1, 16, 12), kit.glow(lighten(color, 0.3)), 1.25), 0, 0.95, 0);
-    [-1, 1].forEach((s) => {
-      const ear = kit.mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.12, 20), kit.mat(color));
-      ear.rotation.z = Math.PI / 2;
-      put(ear, s * 0.56, 0.02, 0);
-    });
-    hatTop = 1.05;
-  } else if (lane === "cs") {
-    const frame = kit.mat(INK);
-    [-0.2, 0.2].forEach((x) => {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 8, 24), frame);
-      kit.owned.push(ring.geometry);
-      put(ring, x, 0.06, 0.55);
-    });
-    const chip = kit.mesh(new THREE.BoxGeometry(0.34, 0.34, 0.06), kit.mat("#1f7a45"), 1.1);
-    put(chip, 0, 1.02, 0.52, body);
-    const core = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.02), kit.glow("#b8ffcf"));
-    kit.owned.push(core.geometry);
-    put(core, 0, 1.02, 0.56, body);
-    hair("#3b2a1f");
-  } else if (lane === "project") {
-    const hat = kit.mesh(new THREE.SphereGeometry(0.6, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), kit.mat(skin.gold ? GOLD : "#ffd23f"));
-    put(hat, 0, 0.12, 0);
-    const brim = kit.mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.06, 28), kit.mat(skin.gold ? GOLD : "#ffd23f"));
-    put(brim, 0, 0.14, 0.05);
-    const handle = kit.mesh(new THREE.BoxGeometry(0.08, 0.6, 0.08), kit.mat(metal), 1.2);
-    handle.position.y = -0.1;
-    rightHand.add(handle);
-    const jaw = kit.mesh(new THREE.TorusGeometry(0.1, 0.045, 8, 16, Math.PI * 1.5), kit.mat(metal), 1.2);
-    jaw.position.y = -0.45;
-    rightHand.add(jaw);
-    hatTop = 0.72;
-  } else if (lane === "dsa") {
-    hair("#1d1d2e");
-    const band = kit.mesh(new THREE.TorusGeometry(0.56, 0.06, 10, 32), kit.mat("#e2364b"), 1.08);
-    band.rotation.x = Math.PI / 2 - 0.15;
-    put(band, 0, 0.22, 0);
-    const blade = kit.mesh(new THREE.BoxGeometry(0.1, 0.95, 0.04), kit.mat(skin.gold ? GOLD : STEEL), 1.15);
-    blade.position.set(0, -0.62, 0.12);
-    rightHand.add(blade);
-    const guard = kit.mesh(new THREE.BoxGeometry(0.34, 0.07, 0.1), kit.mat(GOLD), 1.15);
-    guard.position.set(0, -0.12, 0.12);
-    rightHand.add(guard);
-    parts.arms[1].rotation.x = -0.9;
-  } else if (lane === "research") {
-    hair("#f2f2f2");
-    const band = kit.mesh(new THREE.TorusGeometry(0.57, 0.04, 8, 32), kit.mat(INK), 1.05);
-    band.rotation.x = Math.PI / 2 - 0.3;
-    put(band, 0, 0.22, 0);
-    [-0.2, 0.2].forEach((x) => {
-      const lens = kit.mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.1, 20), kit.mat(lighten(color, 0.4)), 1.12);
-      lens.rotation.x = Math.PI / 2 - 0.5;
-      put(lens, x, 0.33, 0.44);
-    });
-    const flask = kit.mesh(new THREE.SphereGeometry(0.17, 18, 14), kit.glow(lighten(color, 0.2)), 1.12);
-    flask.position.set(0, -0.2, 0.1);
-    rightHand.add(flask);
-    const neck = kit.mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.16, 10), kit.mat("#e8f4ff"), 1.2);
-    neck.position.set(0, -0.02, 0.1);
-    rightHand.add(neck);
-  } else if (lane === "kaggle") {
-    const cap = kit.mesh(new THREE.SphereGeometry(0.58, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), kit.mat(darken(color, 0.15)));
-    cap.scale.y = 0.75;
-    put(cap, 0, 0.24, 0);
-    const brim = kit.mesh(new THREE.BoxGeometry(0.5, 0.05, 0.35), kit.mat(darken(color, 0.35)));
-    put(brim, 0, 0.26, -0.62);
-    const medal = kit.mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 24), kit.mat(GOLD), 1.15);
-    medal.rotation.x = Math.PI / 2;
-    put(medal, 0, 1.12, 0.5, body);
-    hatTop = 0.66;
-  } else if (lane === "sd") {
-    const beret = kit.mesh(new THREE.SphereGeometry(0.55, 24, 12), kit.mat(color));
-    beret.scale.set(1.05, 0.35, 1.05);
-    beret.rotation.z = 0.25;
-    put(beret, 0.08, 0.45, 0);
-    const roll = kit.mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.7, 14), kit.mat("#4f8df5"), 1.15);
-    roll.rotation.x = Math.PI / 2;
-    roll.position.set(0, -0.05, 0.1);
-    rightHand.add(roll);
-    hatTop = 0.62;
-  } else if (lane === "ielts") {
-    const arc = kit.mesh(new THREE.TorusGeometry(0.6, 0.05, 8, 28, Math.PI), kit.mat(INK), 1.1);
-    put(arc, 0, 0.02, 0);
-    [-1, 1].forEach((s) => {
-      const cup = kit.mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.16, 20), kit.mat(color));
-      cup.rotation.z = Math.PI / 2;
-      put(cup, s * 0.6, 0.02, 0);
-    });
-    hatTop = 0.7;
+  // mouth: a wide toothy grin (or a small sleepy one)
+  if (sleeping) {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.02, 6, 12, Math.PI), kit.mat("#7a2331"));
+    kit.owned.push(m.geometry);
+    m.rotation.z = Math.PI;
+    put(m, 0, -0.2, 0.53, head);
   } else {
-    const beanie = kit.mesh(new THREE.SphereGeometry(0.59, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), kit.mat("#e2566b"));
-    put(beanie, 0, 0.1, 0);
-    put(kit.mesh(new THREE.SphereGeometry(0.13, 12, 10), kit.mat("#ffffff")), 0, 0.72, 0);
-    hatTop = 0.84;
+    const grin = kit.mesh(new THREE.SphereGeometry(0.2, 20, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), white, 1.1);
+    grin.scale.set(1, 0.55, 0.45);
+    grin.rotation.z = 0.08;
+    put(grin, 0.03, -0.14, 0.44, head);
+    const gap = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.012, 0.02), kit.mat("#c9c9c9"));
+    kit.owned.push(gap.geometry);
+    put(gap, 0.03, -0.18, 0.53, head);
+  }
+  // cheek + chin shape
+  put(kit.mesh(new THREE.SphereGeometry(0.07, 10, 8), skinMat, 0), 0, -0.02, 0.55, head); // nose
+
+  let hatTop = 0.74;
+  if (sleeping) {
+    const cap = kit.mesh(new THREE.ConeGeometry(0.52, 0.85, 24), kit.mat("#4c5bd4"));
+    cap.rotation.z = -0.5;
+    put(cap, 0.12, 0.62, 0, head);
+    put(kit.mesh(new THREE.SphereGeometry(0.12, 12, 10), kit.mat("#ffffff")), 0.48, 0.92, 0, head);
+    hatTop = 1.0;
+  } else {
+    // sporty cap in the lane colour: crown, white band, forward brim
+    const crown = kit.mesh(new THREE.SphereGeometry(0.6, 28, 16, 0, Math.PI * 2, 0, Math.PI / 2), laneMat, 1.05);
+    crown.scale.set(1, 0.72, 1);
+    put(crown, 0, 0.27, -0.02, head);
+    const bandCap = kit.mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.1, 28, 1, true), kit.mat("#ffffff"), 1.04);
+    put(bandCap, 0, 0.3, -0.02, head);
+    const brim = kit.mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.05, 28, 1, false, -Math.PI / 2, Math.PI), kit.mat(darken(color, 0.3)), 1.08);
+    brim.rotation.x = 0.12;
+    put(brim, 0, 0.3, 0.34, head);
+    put(kit.mesh(new THREE.SphereGeometry(0.06, 10, 8), kit.mat(darken(color, 0.3)), 1.15), 0, 0.71, -0.02, head); // button
   }
 
   // ---------- Trophy Road skins
   if (skin.star) {
-    const star = kit.mesh(new THREE.ExtrudeGeometry(starShape(0.16, 0.07), { depth: 0.05, bevelEnabled: false }), kit.mat(GOLD), 1.12);
-    put(star, -0.26, 1.22, 0.42, body);
+    const star = kit.mesh(new THREE.ExtrudeGeometry(starShape(0.13, 0.055), { depth: 0.04, bevelEnabled: false }), kit.mat(GOLD), 1.12);
+    put(star, 0, 1.2, 0.45, body);
   }
   if (skin.crown) {
     const crown = new THREE.Group();
@@ -299,7 +237,7 @@ function buildCharacter(kit, lane, skin, mood) {
       crown.add(spike);
     }
     put(kit.mesh(new THREE.SphereGeometry(0.06, 12, 10), kit.glow("#ff3b5c"), 1.2), 0, 0.02, 0.29, crown);
-    crown.position.y = hatTop + 0.06;
+    crown.position.y = hatTop;
     head.add(crown);
   }
   if (skin.aura || skin.blaze) {
@@ -341,8 +279,8 @@ export function createArena(container, opts = {}) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
-  camera.position.set(0, 1.8, 6.6);
-  camera.lookAt(0, 1.2, 0);
+  camera.position.set(0, 1.85, 6.1);
+  camera.lookAt(0, 1.32, 0);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x3a4a8a, 1.6));
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
   sun.position.set(3, 6, 5);
@@ -413,12 +351,12 @@ export function createArena(container, opts = {}) {
       else {
         y += Math.sin(Math.PI * p) * 0.85;
         parts.body.rotation.y = p * Math.PI * 2;
-        parts.arms.forEach((a, i) => { a.rotation.z = (i ? 1 : -1) * (0.28 + Math.sin(Math.PI * p) * 1.9); });
+        parts.arms.forEach((a, i) => { a.rotation.z = a.userData.base + (i ? 1 : -1) * Math.sin(Math.PI * p) * 1.4; });
       }
     }
     if (jumpStart < 0) {
       parts.body.rotation.y = 0;
-      if (!reduced) parts.arms[0].rotation.z = -0.28 - Math.sin(t * 2.4) * 0.06;
+      parts.arms.forEach((a, i) => { a.rotation.z = a.userData.base + (reduced ? 0 : (i ? 1 : -1) * Math.sin(t * 2.4) * 0.03); });
     }
     parts.body.position.y = y;
     // head follows the pointer
