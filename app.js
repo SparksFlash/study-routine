@@ -635,6 +635,13 @@
     b.addEventListener("click", function () { show(b.dataset.screen); });
   });
 
+  // ---------- offline support (only works over http/https, not when opened as a file)
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("sw.js").catch(function () { /* offline mode unavailable */ });
+    });
+  }
+
   // ---------- start
   load();
   var startScreen = "now";
