@@ -124,7 +124,7 @@
         (b.details ? '<div class="details">' + esc(b.details) + "</div>" : "") +
         '<div class="remaining">' + dur(e - p.minutes) + " left</div>" +
         '<div class="progress" role="progressbar" aria-label="Block progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(pct) + '"><span style="width:' + pct.toFixed(1) + '%"></span></div>' +
-        (topic ? '<div class="topic"><strong>This month:</strong> ' + esc(topic) + "</div>" : "") +
+        (topic ? '<div class="now-topic"><strong>This month:</strong> ' + esc(topic) + "</div>" : "") +
         '<div class="btn-row"><button type="button" class="btn primary done-btn" data-done="' + esc(b.id) + '" aria-pressed="' + done + '">' +
         (done ? "Done ✓ (tap to undo)" : "Done ✓") + "</button></div>" +
         "</article>";
@@ -242,8 +242,19 @@
     }
     html += "</div></div>";
     html += '<div class="legend-lanes" aria-label="Lanes">' + Object.keys(D.LANES).map(chip).join("") + "</div>";
+    var prev = $(".week-wrap", root);
+    var keep = prev && weekScrolled ? prev.scrollLeft : null;
     root.innerHTML = html;
+    var wrap = $(".week-wrap", root);
+    if (keep != null) wrap.scrollLeft = keep;
+    else {
+      // First time on a narrow screen: scroll so today's column is visible.
+      var col = $(".wk-col.today", root);
+      if (col && col.offsetLeft + col.offsetWidth > wrap.clientWidth) wrap.scrollLeft = col.offsetLeft - 44;
+      weekScrolled = true;
+    }
   };
+  var weekScrolled = false;
 
   // ---------- block editor
   var editing = null; // { id|null, draft }
@@ -376,7 +387,7 @@
 
     var e = t.entry;
     html += '<article class="card"><div class="card-head"><h3>LeetCode target</h3></div>' +
-      '<div class="lc-target">' + esc(e.lc) + ' <span class="small muted">problems solved in total by month end</span></div></article>';
+      '<div class="lc-target">' + esc(e.lc) + '</div><p class="small muted">problems solved in total by the end of the month</p></article>';
 
     html += '<article class="card"><h3>Topics by lane</h3><div class="topic-list">';
     D.TOPIC_LANES.forEach(function (l) {
@@ -646,6 +657,7 @@
   load();
   var startScreen = "now";
   try { startScreen = sessionStorage.getItem("sr.screen") || "now"; } catch (e) { /* ignore */ }
+  if (SCREENS[location.hash.slice(1)]) startScreen = location.hash.slice(1); // e.g. index.html#today
   show(SCREENS[startScreen] ? startScreen : "now");
   // Refresh every 15 s. Screens with inputs only re-render when the minute changes and nothing is focused/open.
   var lastMinute = -1;

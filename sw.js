@@ -1,6 +1,6 @@
 /* Study Routine — service worker: offline support.
- * Serves files from cache instantly and refreshes them in the background,
- * so a new version shows up on the next open. Bump VERSION to force a full refresh.
+ * Network first (so a new deploy shows up right away), cached copy when offline.
+ * Bump VERSION when the list of files changes.
  */
 var VERSION = "v1";
 var CACHE = "study-routine-" + VERSION;
@@ -38,17 +38,21 @@ self.addEventListener("fetch", function (event) {
   var isPage = req.mode === "navigate";
   event.respondWith(
     caches.open(CACHE).then(function (cache) {
-      return cache.match(req, { ignoreSearch: isPage }).then(function (cached) {
-        var network = fetch(req).then(function (res) {
-          if (res && res.ok) cache.put(isPage ? "./" : req, res.clone());
-          return res;
-        }).catch(function () {
-          if (cached) return cached;
-          return (isPage ? cache.match("./") : Promise.resolve()).then(function (r) { return r || Response.error(); });
+      var fromCache = function () {
+        return cache.match(req, { ignoreSearch: isPage }).then(function (hit) {
+          return hit || (isPage ? cache.match("./") : undefined);
         });
-        if (cached) { event.waitUntil(network.catch(function () {})); return cached; }
-        return network;
+      };
+      var network = fetch(req).then(function (res) {
+        if (res && res.ok) cache.put(isPage ? "./" : req, res.clone());
+        return res;
       });
+      // Network first so updates show immediately; fall back to cache when offline or slow (> 3 s).
+      var timeout = new Promise(function (resolve) { setTimeout(resolve, 3000); }).then(fromCache);
+      return Promise.race([network.catch(fromCache), timeout.then(function (hit) { return hit || network; })])
+        .then(function (res) { return res || fromCache(); })
+        .then(function (res) { return res || Response.error(); })
+        .catch(function () { return fromCache().then(function (res) { return res || Response.error(); }); });
     })
   );
 });

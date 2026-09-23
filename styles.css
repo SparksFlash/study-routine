@@ -169,7 +169,7 @@ main { padding: 12px 16px 24px; }
 .now-card .title { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
 .now-card .time { font-variant-numeric: tabular-nums; font-weight: 600; }
 .now-card .details { opacity: .92; }
-.now-card .topic { font-size: .9rem; border-top: 1px dashed currentColor; padding-top: 8px; opacity: .92; }
+.now-card .now-topic { font-size: .9rem; border-top: 1px dashed currentColor; padding-top: 8px; opacity: .92; }
 .now-card .lane-chip { background: var(--surface); color: var(--text); }
 .remaining { font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .progress { height: 10px; border-radius: 999px; background: rgba(127,127,127,.25); overflow: hidden; }
