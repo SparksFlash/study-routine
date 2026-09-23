@@ -19,6 +19,7 @@ A small web app for your phone and laptop. It shows what you should be doing rig
 | `logic.js` | Time zone, current/next block, streak, `.ics` export (no UI) |
 | `data.js` | Default routine, short plans, monthly topics, first 30 days |
 | `manifest.webmanifest`, `sw.js`, `icons/` | What makes it installable and work offline |
+| `fonts/` | Inter typeface, served from the app so it works offline (SIL Open Font License) |
 | `tests.html`, `tests.js` | Tests |
 | `.github/workflows/pages.yml` | Publishes the app to GitHub Pages automatically |
 

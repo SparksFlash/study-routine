@@ -93,10 +93,36 @@
     render();
     window.scrollTo(0, 0);
   }
+  function setClock(p) {
+    var h = p.hh;
+    $("#greet").textContent = h >= 4 && h < 12 ? "Good morning" : h >= 12 && h < 17 ? "Good afternoon" : h >= 17 && h < 22 ? "Good evening" : "Good night";
+    $("#date-line").textContent = prettyDate(p.dateStr).replace(/ \d{4}$/, "");
+    $("#clock-time").textContent = SR.pad(p.hh) + ":" + SR.pad(p.mm);
+  }
   function render() {
     var p = now();
-    $("#clock").textContent = D.WEEKDAYS[p.dow] + " " + SR.pad(p.hh) + ":" + SR.pad(p.mm) + " · Dhaka";
+    setClock(p);
     if (SCREENS[current]) SCREENS[current]($("#screen-" + current), p);
+  }
+
+  // ---------- shared UI bits
+  function icon(name, cls) {
+    return '<svg class="ico' + (cls ? " " + cls : "") + '" aria-hidden="true"><use href="#i-' + name + '"/></svg>';
+  }
+
+  // Countdown ring; the big number is the time left in the block.
+  function ring(pct, minsLeft) {
+    var R = 52, C = 2 * Math.PI * R;
+    var m = Math.max(0, Math.ceil(minsLeft));
+    var big = m < 60 ? String(m) : Math.floor(m / 60) + ":" + SR.pad(m % 60);
+    return '<div class="ring" role="progressbar" aria-label="Block progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(pct) + '">' +
+      '<svg viewBox="0 0 120 120" aria-hidden="true"><circle class="ring-track" cx="60" cy="60" r="' + R + '"/>' +
+      '<circle class="ring-bar" cx="60" cy="60" r="' + R + '" stroke-dasharray="' + C.toFixed(1) + '" stroke-dashoffset="' + (C * (1 - pct / 100)).toFixed(1) + '"/></svg>' +
+      '<div class="ring-label"><span class="ring-big">' + big + '</span><span class="ring-unit">' + (m < 60 ? "min left" : "h left") + "</span></div></div>";
+  }
+
+  function pageHead(eyebrow, title, right) {
+    return '<div class="page-head"><div><p class="eyebrow">' + esc(eyebrow) + '</p><h2 class="page-title">' + title + "</h2></div>" + (right || "") + "</div>";
   }
 
   // ---------- Now screen
@@ -109,7 +135,7 @@
     var html = "";
 
     if (mode !== "normal") {
-      html += '<p class="small muted">Today is running the <strong>' + esc(state.plans[mode].label) + "</strong>. Change it on the Today screen.</p>";
+      html += '<p class="notice">' + icon("bolt") + "<span>Running the <strong>" + esc(state.plans[mode].label) + "</strong> today. Switch it on the Today screen.</span></p>";
     }
 
     if (nn.status === "block") {
@@ -117,51 +143,61 @@
       var pct = Math.min(100, Math.max(0, ((p.minutes - s) / (e - s)) * 100));
       var topic = SR.laneTopic(p.monthKey, b.lane);
       var done = isDone(p.dateStr, b.id);
-      html += '<article class="card now-card lane-' + esc(b.lane) + '">' +
-        '<div class="card-head"><span class="label">Now</span>' + chip(b.lane) + "</div>" +
-        '<div class="time">' + range(b) + (b.optional ? " · optional" : "") + "</div>" +
-        '<div class="title">' + esc(b.title) + "</div>" +
-        (b.details ? '<div class="details">' + esc(b.details) + "</div>" : "") +
-        '<div class="remaining">' + dur(e - p.minutes) + " left</div>" +
-        '<div class="progress" role="progressbar" aria-label="Block progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.round(pct) + '"><span style="width:' + pct.toFixed(1) + '%"></span></div>' +
-        (topic ? '<div class="now-topic"><strong>This month:</strong> ' + esc(topic) + "</div>" : "") +
-        '<div class="btn-row"><button type="button" class="btn primary done-btn" data-done="' + esc(b.id) + '" aria-pressed="' + done + '">' +
-        (done ? "Done ✓ (tap to undo)" : "Done ✓") + "</button></div>" +
+      html += '<article class="hero lane-' + esc(b.lane) + (done ? " is-done" : "") + '">' +
+        '<div class="hero-head"><span class="live"><span class="live-dot"></span>Now</span>' + chip(b.lane) + "</div>" +
+        '<h2 class="hero-title">' + esc(b.title) + "</h2>" +
+        (b.details ? '<p class="hero-details">' + esc(b.details) + "</p>" : "") +
+        '<div class="hero-row">' + ring(pct, e - p.minutes) +
+        '<dl class="hero-meta">' +
+        "<div><dt>Block</dt><dd>" + range(b) + "</dd></div>" +
+        "<div><dt>Done so far</dt><dd>" + Math.round(pct) + "%</dd></div>" +
+        (b.optional ? "<div><dt>Type</dt><dd>Optional</dd></div>" : "") +
+        "</dl></div>" +
+        (topic ? '<div class="hero-topic">' + icon("target") + '<div><span class="eyebrow">This month</span><p>' + esc(topic) + "</p></div></div>" : "") +
+        '<button type="button" class="btn hero-done" data-done="' + esc(b.id) + '" aria-pressed="' + done + '">' +
+        icon("check") + (done ? "Done — tap to undo" : "Mark as done") + "</button>" +
         "</article>";
     } else if (nn.status === "sleep") {
       var sleepBlk = nn.current;
-      html += '<article class="card sleep-card">' +
-        '<div class="card-head"><span class="label small muted">Now</span>' + chip("routine") + "</div>" +
-        '<div class="title">Sleep — 7.5 h, non-negotiable</div>' +
-        '<p class="muted">Phone down. Tomorrow starts at ' + esc(nn.next ? nn.next.start : "06:30") + ".</p>" +
-        (sleepBlk ? '<div class="btn-row"><button type="button" class="btn done-btn" data-done="' + esc(sleepBlk.id) + '" aria-pressed="' + isDone(p.dateStr, sleepBlk.id) + '">' +
-          (isDone(p.dateStr, sleepBlk.id) ? "In bed ✓ (tap to undo)" : "In bed ✓") + "</button></div>" : "") +
+      var slept = sleepBlk && isDone(p.dateStr, sleepBlk.id);
+      html += '<article class="hero hero-night">' +
+        '<div class="hero-head"><span class="live"><span class="live-dot"></span>Now</span><span class="night-tag">Routine</span></div>' +
+        '<div class="night-icon">' + icon("moon") + "</div>" +
+        '<h2 class="hero-title">Sleep — 7.5 h, non-negotiable</h2>' +
+        '<p class="hero-details">Phone down. Tomorrow starts at ' + esc(nn.next ? nn.next.start : "06:30") + ".</p>" +
+        (sleepBlk ? '<button type="button" class="btn hero-done" data-done="' + esc(sleepBlk.id) + '" aria-pressed="' + !!slept + '">' +
+          icon("check") + (slept ? "In bed — tap to undo" : "I'm in bed") + "</button>" : "") +
         "</article>";
     } else {
-      html += '<article class="card sleep-card">' +
-        '<div class="card-head"><span class="label small muted">Now</span>' + chip("routine") + "</div>" +
-        '<div class="title">Free time</div>' +
-        '<p class="muted">Nothing scheduled' + (nn.next ? " for " + dur(SR.toMin(nn.next.start) - p.minutes) : "") + ". Rest, eat, or catch up.</p>" +
+      html += '<article class="hero hero-free">' +
+        '<div class="hero-head"><span class="live"><span class="live-dot"></span>Now</span>' + chip("routine") + "</div>" +
+        '<div class="night-icon">' + icon("cup") + "</div>" +
+        '<h2 class="hero-title">Free time</h2>' +
+        '<p class="hero-details">Nothing scheduled' + (nn.next ? " for " + dur(SR.toMin(nn.next.start) - p.minutes) : "") + ". Rest, eat, or catch up.</p>" +
         "</article>";
     }
 
     if (nn.next) {
       var n = nn.next;
-      var when = nn.nextIsTomorrow
-        ? "Tomorrow at " + esc(n.start)
-        : "At " + esc(n.start) + " · in " + dur(SR.toMin(n.start) - p.minutes);
-      html += '<article class="card next-card lane-' + esc(n.lane) + '">' +
-        '<div class="card-head"><span class="small muted">Next</span>' + chip(n.lane) + "</div>" +
-        '<div class="title">' + esc(n.title) + "</div>" +
-        '<div class="small">' + when + " · " + range(n) + "</div>" +
-        (n.details ? '<div class="small muted">' + esc(n.details) + "</div>" : "") +
+      html += '<article class="next lane-' + esc(n.lane) + '">' +
+        '<div class="next-when"><span class="eyebrow">Up next</span><span class="next-time">' + esc(n.start) + "</span>" +
+        '<span class="next-in">' + (nn.nextIsTomorrow ? "tomorrow" : "in " + dur(SR.toMin(n.start) - p.minutes)) + "</span></div>" +
+        '<div class="next-body">' + chip(n.lane) + '<h3 class="next-title">' + esc(n.title) + "</h3>" +
+        '<p class="small muted">' + range(n) + (n.details ? " · " + esc(n.details) : "") + "</p></div>" +
         "</article>";
     }
+
+    var st = SR.streaks(state, p.dateStr);
+    var score = SR.dayScore(state, p.dateStr);
+    html += '<div class="mini-stats">' +
+      '<div class="mini">' + icon("flame", "c-flame") + "<div><strong>" + st.current + "</strong><span>day streak</span></div></div>" +
+      '<div class="mini">' + icon("target", "c-accent") + "<div><strong>" + Math.round(score.ratio * 100) + "%</strong><span>of today done</span></div></div>" +
+      "</div>";
     root.innerHTML = html;
   };
 
   // ---------- Today screen
-  var MODES = [["normal", "Normal"], ["three", "3-hour plan"], ["one", "1-hour minimum day"]];
+  var MODES = [["normal", "Normal"], ["three", "3-hour plan"], ["one", "1-hour day"]];
 
   SCREENS.today = function (root, p) {
     var mode = modeFor(p.dateStr);
@@ -170,7 +206,8 @@
     var nn = SR.findNowNext(blocks, tomorrow, p.minutes);
     var html = "";
 
-    html += '<div class="card-head"><h2>' + esc(prettyDate(p.dateStr)) + "</h2></div>";
+    html += pageHead("Today", esc(D.WEEKDAYS_LONG[p.dow]),
+      mode === "normal" ? '<button type="button" class="btn small primary" data-add="' + p.dow + '">' + icon("plus") + "Add block</button>" : "");
     html += '<div class="seg" role="group" aria-label="Day plan">' + MODES.map(function (m) {
       return '<button type="button" data-mode="' + m[0] + '" aria-pressed="' + (mode === m[0]) + '">' + m[1] + "</button>";
     }).join("") + "</div>";
@@ -187,22 +224,20 @@
       var done = isDone(p.dateStr, b.id);
       var isCur = nn.current === b;
       var past = SR.toMin(b.end) <= p.minutes;
-      var cls = "tl-row" + (isCur ? " current" : "") + (done ? " done" : "") + (past ? " past" : "");
+      var cls = "tl-row lane-" + esc(b.lane) + (isCur ? " current" : "") + (done ? " done" : "") + (past ? " past" : "");
       html += '<li class="' + cls + '">' +
-        '<span class="tl-check"><input type="checkbox" data-check="' + esc(b.id) + '"' + (done ? " checked" : "") +
-        ' aria-label="Done: ' + esc(b.title) + '"></span>' +
-        '<button type="button" class="tl-item lane-' + esc(b.lane) + '"' + (b.plan ? "" : ' data-edit="' + esc(b.id) + '"') + ">" +
-        '<span class="top"><span class="time">' + range(b) + "</span>" +
-        (isCur ? '<span class="now-tag">NOW</span>' : "") + chip(b.lane) + "</span>" +
-        '<span class="t">' + esc(b.title) + (b.optional ? " <span class=\"tiny\">(optional)</span>" : "") + "</span>" +
+        '<div class="tl-time"><span>' + esc(b.start) + '</span><span class="tl-end">' + esc(b.end) + "</span></div>" +
+        '<div class="tl-card">' +
+        '<label class="tick"><input type="checkbox" data-check="' + esc(b.id) + '"' + (done ? " checked" : "") + '><span class="sr-only">Done: ' + esc(b.title) + "</span></label>" +
+        '<button type="button" class="tl-item"' + (b.plan ? "" : ' data-edit="' + esc(b.id) + '"') + ">" +
+        '<span class="tl-top">' + chip(b.lane) + (isCur ? '<span class="now-tag"><span class="live-dot"></span>Now</span>' : "") +
+        (b.optional ? '<span class="opt-tag">optional</span>' : "") + "</span>" +
+        '<span class="t">' + esc(b.title) + "</span>" +
         (b.details ? '<span class="d">' + esc(b.details) + "</span>" : "") +
-        "</button></li>";
+        "</button></div></li>";
     });
     html += "</ol>";
-    if (mode === "normal") {
-      html += '<div class="btn-row"><button type="button" class="btn small" data-add="' + p.dow + '">+ Add block</button></div>' +
-        '<p class="small muted">Tap a block to edit it. Edits apply to every weekday the block repeats on.</p>';
-    }
+    if (mode === "normal") html += '<p class="hint">Tap a block to edit it. A block that repeats on several weekdays changes on all of them.</p>';
     html += first30Html(p) + heatmapHtml(p);
     root.innerHTML = html;
   };
@@ -212,8 +247,8 @@
 
   SCREENS.week = function (root, p) {
     var h = (WK_END - WK_START) * PX;
-    var html = '<div class="card-head"><h2>Week</h2><button type="button" class="btn small primary" data-add="' + p.dow + '">+ Add block</button></div>';
-    html += '<p class="small muted">Tap any block to edit it. Scroll sideways on a phone.</p>';
+    var html = pageHead("Timetable", "Week", '<button type="button" class="btn small primary" data-add="' + p.dow + '">' + icon("plus") + "Add block</button>");
+    html += '<p class="hint">Tap any block to edit it. Swipe sideways to see every day.</p>';
     html += '<div class="week-wrap"><div class="week" role="grid" aria-label="Weekly timetable">';
     html += '<div class="wk-head" aria-hidden="true"></div>';
     D.WEEKDAYS.forEach(function (d, i) {
@@ -372,13 +407,13 @@
     var ym = Math.floor(idx / 12) + "-" + SR.pad(idx % 12 + 1);
     var t = SR.topicsFor(ym);
     var title = MONTH_NAMES[idx % 12] + " " + Math.floor(idx / 12);
-    var html = '<div class="month-nav"><button type="button" class="btn small" data-month="-1" aria-label="Previous month">‹</button>' +
-      "<h2>" + esc(title) + (monthOffset === 0 ? ' <span class="small muted">(this month)</span>' : "") + "</h2>" +
-      '<button type="button" class="btn small" data-month="1" aria-label="Next month">›</button></div>';
+    var html = '<div class="month-nav"><button type="button" class="icon-btn" data-month="-1" aria-label="Previous month">' + icon("left") + "</button>" +
+      '<div class="month-title"><p class="eyebrow">' + (monthOffset === 0 ? "This month" : "Roadmap") + '</p><h2 class="page-title">' + esc(title) + "</h2></div>" +
+      '<button type="button" class="icon-btn" data-month="1" aria-label="Next month">' + icon("right") + "</button></div>";
     if (monthOffset !== 0) html += '<div class="btn-row"><button type="button" class="btn small ghost" data-month="0">Back to this month</button></div>';
 
     if (t.phase0) {
-      html += '<article class="card"><h3>Phase 0</h3><p>' + esc(t.text) + "</p>" +
+      html += '<article class="card"><h3 class="card-title">' + icon("bolt") + 'Phase 0</h3><p>' + esc(t.text) + "</p>" +
         '<p class="small muted">The roadmap topics start in October 2026. Use the First 30 days list on the Today screen.</p></article>';
       root.innerHTML = html;
       return;
@@ -386,10 +421,10 @@
     if (t.reused) html += '<p class="small muted">Showing the April 2028 plan (it carries on until the roadmap ends).</p>';
 
     var e = t.entry;
-    html += '<article class="card"><div class="card-head"><h3>LeetCode target</h3></div>' +
+    html += '<article class="card lc-card"><h3 class="card-title">' + icon("target") + "LeetCode target</h3>" +
       '<div class="lc-target">' + esc(e.lc) + '</div><p class="small muted">problems solved in total by the end of the month</p></article>';
 
-    html += '<article class="card"><h3>Topics by lane</h3><div class="topic-list">';
+    html += '<article class="card"><h3 class="card-title">' + icon("month") + 'Topics by lane</h3><div class="topic-list">';
     D.TOPIC_LANES.forEach(function (l) {
       var v = e[l];
       html += '<div class="topic lane-' + l + '">' + chip(l) + "<p>" + esc(v && v !== "—" ? v : "— (nothing new this month)") + "</p></div>";
@@ -397,7 +432,7 @@
     html += "</div></article>";
 
     var doneMap = state.monthDone[ym] || {};
-    html += '<article class="card"><h3>Done when</h3>';
+    html += '<article class="card"><h3 class="card-title">' + icon("check") + "Done when</h3>";
     if (!e.done.length) html += '<p class="small muted">No checkpoint for this month.</p>';
     else {
       html += '<ul class="checklist">' + e.done.map(function (txt, i) {
@@ -418,7 +453,7 @@
     var dayN = SR.daysBetween("2026-09-23", p.dateStr) + 1;
     var rec = (state.days[p.dateStr] && state.days[p.dateStr].first30) || {};
     var n = rows.filter(function (_, i) { return rec[i]; }).length;
-    return '<article class="card"><div class="card-head"><h3>First 30 days · day ' + dayN + "</h3>" +
+    return '<article class="card"><div class="card-head"><h3 class="card-title">' + icon("calendar") + "First 30 days · day " + dayN + "</h3>" +
       '<span class="small muted">' + n + "/" + rows.length + "</span></div>" +
       '<ul class="checklist">' + rows.map(function (r, i) {
         var c = !!rec[i];
@@ -435,9 +470,9 @@
   }
 
   SCREENS.settings = function (root, p) {
-    var html = '<h2>Settings</h2>';
+    var html = pageHead("Preferences", "Settings");
 
-    html += '<article class="card"><h3>University class times</h3>' +
+    html += '<article class="card"><h3 class="card-title">' + icon("school") + "University class times</h3>" +
       '<p class="small muted">Tick the days you have classes. Other blocks are not moved automatically — check the Week screen for overlaps.</p>' +
       '<div class="class-grid">';
     for (var d = 0; d < 7; d++) {
@@ -449,17 +484,17 @@
     html += '</div><div class="msg error" id="class-err" role="alert"></div>' +
       '<div class="btn-row"><button type="button" class="btn primary" id="class-save">Save class times</button></div></article>';
 
-    html += '<article class="card"><h3>Short plans</h3><div class="row2">' +
+    html += '<article class="card"><h3 class="card-title">' + icon("bolt") + 'Short plans</h3><div class="row2">' +
       '<label>3-hour plan starts<input type="time" data-planstart="three" value="' + esc(state.plans.three.start) + '"></label>' +
       '<label>1-hour day starts<input type="time" data-planstart="one" value="' + esc(state.plans.one.start) + '"></label>' +
       "</div></article>";
 
-    html += '<article class="card"><h3>Google Calendar (.ics)</h3>' +
+    html += '<article class="card"><h3 class="card-title">' + icon("calendar") + "Google Calendar reminders</h3>" +
       '<p class="small">Exports your current weekly routine as repeating events with a reminder 5 minutes before each block (Sleep is skipped). Import steps are in the README.</p>' +
       '<label>Start repeating from<input type="date" id="ics-start" value="' + SR.nextSunday(SR.addDays(p.dateStr, 1)) + '"></label>' +
       '<div class="btn-row"><button type="button" class="btn primary" id="ics-export">Export .ics</button></div></article>';
 
-    html += '<article class="card"><h3>Your data</h3>' +
+    html += '<article class="card"><h3 class="card-title">' + icon("data") + "Your data</h3>" +
       '<p class="small muted">Everything is stored only in this browser. To move to another device: Export here, send the file to yourself, then Import on the other device.</p>' +
       '<div class="btn-row"><button type="button" class="btn" id="json-export">Export data (JSON)</button>' +
       '<button type="button" class="btn" id="json-import">Import data (JSON)</button>' +
@@ -565,13 +600,16 @@
       ["Shutdown", doneWhere(function (b) { return b.tag === "shutdown" || (b.plan && b.lane === "routine"); })],
       ["Sleep", doneWhere(function (b) { return b.tag === "sleep"; })]
     ];
-    return '<article class="card"><div class="stats">' +
-      '<div class="stat"><div class="n">' + st.current + '</div><div class="l">Current streak (days)</div></div>' +
-      '<div class="stat"><div class="n">' + st.longest + '</div><div class="l">Longest streak</div></div>' +
-      '<div class="stat"><div class="n">' + Math.round(score.ratio * 100) + '%</div><div class="l">Today' + (score.qualifies ? " ✓" : " (70% counts)") + "</div></div>" +
+    var pct = Math.round(score.ratio * 100);
+    return '<article class="card streak-card"><div class="stats">' +
+      '<div class="stat">' + icon("flame", "c-flame") + '<div class="n">' + st.current + '</div><div class="l">Day streak</div></div>' +
+      '<div class="stat">' + icon("trophy", "c-trophy") + '<div class="n">' + st.longest + '</div><div class="l">Best streak</div></div>' +
+      '<div class="stat">' + icon("target", "c-accent") + '<div class="n">' + pct + '%</div><div class="l">Today</div></div>' +
       "</div>" +
-      '<div><p class="small muted">Never skip</p><div class="badges">' + badges.map(function (b) {
-        return '<span class="badge' + (b[1] ? " ok" : "") + '">' + (b[1] ? "✓ " : "○ ") + b[0] + "</span>";
+      '<div class="goal"><div class="goal-bar"><span style="width:' + pct + '%"></span><i style="left:70%"></i></div>' +
+      '<p class="tiny muted">' + (score.qualifies ? "Today counts toward your streak." : "Reach 70% of study blocks (or finish a short plan) to keep the streak.") + "</p></div>" +
+      '<div><p class="eyebrow">Never skip</p><div class="badges">' + badges.map(function (b) {
+        return '<span class="badge' + (b[1] ? " ok" : "") + '">' + (b[1] ? icon("check") : '<span class="badge-dot"></span>') + b[0] + "</span>";
       }).join("") + "</div></div></article>";
   }
 
@@ -586,7 +624,7 @@
       var lvl = sc.qualifies ? 4 : sc.ratio >= 0.5 ? 3 : sc.ratio >= 0.25 ? 2 : sc.ratio > 0 ? 1 : 0;
       cells += '<span class="cell l' + lvl + (d === p.dateStr ? " today" : "") + '" title="' + d + ": " + Math.round(sc.ratio * 100) + '%"></span>';
     }
-    return '<article class="card"><div class="card-head"><h3>Last 12 weeks</h3>' +
+    return '<article class="card"><div class="card-head"><h3 class="card-title">' + icon("week") + "Last 12 weeks</h3>" +
       '<span class="legend tiny muted">less <span class="cell" style="background:var(--heat-0)"></span><span class="cell" style="background:var(--heat-1)"></span>' +
       '<span class="cell" style="background:var(--heat-2)"></span><span class="cell" style="background:var(--heat-3)"></span><span class="cell" style="background:var(--heat-4)"></span> streak day</span></div>' +
       '<div class="heatmap" role="img" aria-label="Daily completion for the last 12 weeks, rows Sunday to Saturday">' + cells + "</div></article>";
@@ -664,6 +702,7 @@
   setInterval(function () {
     var p = now();
     var minute = p.hh * 60 + p.mm;
+    setClock(p);
     var busy = $("#editor").open || (document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName));
     if (current === "now") render();
     else if (minute !== lastMinute && !busy) render();
