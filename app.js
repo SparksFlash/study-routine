@@ -418,6 +418,128 @@
       }).join("") + "</ul></article>";
   }
 
+  // ---------- Settings screen
+  function classBlockFor(dow) {
+    return state.blocks.filter(function (b) { return b.kind === "class" && b.days.indexOf(dow) !== -1; })[0];
+  }
+
+  SCREENS.settings = function (root, p) {
+    var html = '<h2>Settings</h2>';
+
+    html += '<article class="card"><h3>University class times</h3>' +
+      '<p class="small muted">Tick the days you have classes. Other blocks are not moved automatically — check the Week screen for overlaps.</p>' +
+      '<div class="class-grid">';
+    for (var d = 0; d < 7; d++) {
+      var cb = classBlockFor(d);
+      html += '<label class="check"><input type="checkbox" data-classday="' + d + '"' + (cb ? " checked" : "") + "> " + D.WEEKDAYS[d] + "</label>" +
+        '<input type="time" aria-label="' + D.WEEKDAYS_LONG[d] + ' class start" data-classstart="' + d + '" value="' + (cb ? cb.start : "09:00") + '">' +
+        '<input type="time" aria-label="' + D.WEEKDAYS_LONG[d] + ' class end" data-classend="' + d + '" value="' + (cb ? cb.end : "14:00") + '">';
+    }
+    html += '</div><div class="msg error" id="class-err" role="alert"></div>' +
+      '<div class="btn-row"><button type="button" class="btn primary" id="class-save">Save class times</button></div></article>';
+
+    html += '<article class="card"><h3>Short plans</h3><div class="row2">' +
+      '<label>3-hour plan starts<input type="time" data-planstart="three" value="' + esc(state.plans.three.start) + '"></label>' +
+      '<label>1-hour day starts<input type="time" data-planstart="one" value="' + esc(state.plans.one.start) + '"></label>' +
+      "</div></article>";
+
+    html += '<article class="card"><h3>Google Calendar (.ics)</h3>' +
+      '<p class="small">Exports your current weekly routine as repeating events with a reminder 5 minutes before each block (Sleep is skipped). Import steps are in the README.</p>' +
+      '<label>Start repeating from<input type="date" id="ics-start" value="' + SR.nextSunday(SR.addDays(p.dateStr, 1)) + '"></label>' +
+      '<div class="btn-row"><button type="button" class="btn primary" id="ics-export">Export .ics</button></div></article>';
+
+    html += '<article class="card"><h3>Your data</h3>' +
+      '<p class="small muted">Everything is stored only in this browser. To move to another device: Export here, send the file to yourself, then Import on the other device.</p>' +
+      '<div class="btn-row"><button type="button" class="btn" id="json-export">Export data (JSON)</button>' +
+      '<button type="button" class="btn" id="json-import">Import data (JSON)</button>' +
+      '<input type="file" id="json-file" accept=".json,application/json" hidden>' +
+      '<button type="button" class="btn danger" id="reset">Reset to default</button></div></article>';
+
+    html += '<p class="tiny muted">All times are Asia/Dhaka (UTC+6). Tip: add ?now=2026-09-27T20:44 to the address to preview another time.</p>';
+    root.innerHTML = html;
+  };
+
+  function download(filename, text, type) {
+    var blob = new Blob([text], { type: type });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  document.addEventListener("click", function (ev) {
+    var id = ev.target.id;
+    if (id === "class-save") {
+      var rows = [], err = "";
+      for (var d = 0; d < 7; d++) {
+        if (!$('[data-classday="' + d + '"]').checked) continue;
+        var s = $('[data-classstart="' + d + '"]').value, e = $('[data-classend="' + d + '"]').value;
+        if (!SR.isTime(s) || !SR.isTime(e) || SR.toMin(e) <= SR.toMin(s)) { err = D.WEEKDAYS_LONG[d] + ": end must be after start."; break; }
+        rows.push({ d: d, s: s, e: e });
+      }
+      $("#class-err").textContent = err;
+      if (err) return;
+      var old = {};
+      state.blocks.forEach(function (b) { if (b.kind === "class") b.days.forEach(function (x) { old[x] = b; }); });
+      state.blocks = state.blocks.filter(function (b) { return b.kind !== "class"; });
+      rows.forEach(function (r) {
+        var prev = old[r.d] || {};
+        state.blocks.push({ id: "class-" + r.d, days: [r.d], start: r.s, end: r.e, lane: "routine",
+          title: prev.title || "University", details: prev.details != null ? prev.details : "Classes / thesis", kind: "class" });
+      });
+      save();
+      toast("Class times saved");
+      render();
+    } else if (id === "ics-export") {
+      var start = $("#ics-start").value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start)) { toast("Pick a start date first"); return; }
+      download("study-routine.ics", SR.buildICS(state.blocks, start, new Date()), "text/calendar;charset=utf-8");
+      toast("Downloaded study-routine.ics");
+    } else if (id === "json-export") {
+      var out = SR.clone(state);
+      out.app = "study-routine";
+      out.exportedAt = new Date().toISOString();
+      download("study-routine-" + now().dateStr + ".json", JSON.stringify(out, null, 2), "application/json");
+      toast("Downloaded your data");
+    } else if (id === "json-import") {
+      $("#json-file").click();
+    } else if (id === "reset") {
+      if (!confirm("Reset everything to the default routine? This deletes your edits, ticks and streak on this device.")) return;
+      if (!confirm("Are you sure? Export your data first if you might want it back.")) return;
+      state = SR.defaultState();
+      save();
+      toast("Reset to default");
+      render();
+    }
+  });
+
+  document.addEventListener("change", function (ev) {
+    var t = ev.target;
+    if (t.id === "json-file" && t.files && t.files[0]) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var parsed;
+        try { parsed = JSON.parse(reader.result); } catch (e) { toast("That file isn't valid JSON."); return; }
+        if (!parsed || !Array.isArray(parsed.blocks)) { toast("That file isn't a Study Routine export."); return; }
+        if (!confirm("Replace all data on this device with the imported file?")) return;
+        state = SR.normalizeState(parsed);
+        save();
+        toast("Data imported");
+        render();
+      };
+      reader.onerror = function () { toast("Couldn't read that file."); };
+      reader.readAsText(t.files[0]);
+      t.value = "";
+    } else if (t.matches("[data-planstart]") && SR.isTime(t.value)) {
+      state.plans[t.dataset.planstart].start = t.value;
+      save();
+      toast("Plan start saved");
+    }
+  });
+
   // ---------- streak, never-skip badges, heatmap
   function streakHtml(p) {
     var st = SR.streaks(state, p.dateStr);
