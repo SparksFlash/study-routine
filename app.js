@@ -400,9 +400,26 @@
     root.innerHTML = html;
   };
 
+  // ---------- First 30 days (23 Sep → 22 Oct 2026), shown under Today's timeline
+  function first30Html(p) {
+    var rows = SR.first30For(p.dateStr);
+    if (!rows) return "";
+    var dayN = SR.daysBetween("2026-09-23", p.dateStr) + 1;
+    var rec = (state.days[p.dateStr] && state.days[p.dateStr].first30) || {};
+    var n = rows.filter(function (_, i) { return rec[i]; }).length;
+    return '<article class="card"><div class="card-head"><h3>First 30 days · day ' + dayN + "</h3>" +
+      '<span class="small muted">' + n + "/" + rows.length + "</span></div>" +
+      '<ul class="checklist">' + rows.map(function (r, i) {
+        var c = !!rec[i];
+        var empty = r.text === "—" || r.text === "Off";
+        return '<li><label><input type="checkbox" data-f30="' + i + '"' + (c ? " checked" : "") + '>' +
+          '<span class="col">' + esc(r.col) + "</span>" +
+          '<span class="' + (c ? "done-text" : empty ? "muted" : "") + '">' + esc(r.text) + "</span></label></li>";
+      }).join("") + "</ul></article>";
+  }
+
   // Filled in by later sections.
   function streakHtml() { return ""; }
-  function first30Html() { return ""; }
   function heatmapHtml() { return ""; }
 
   // ---------- events
@@ -436,6 +453,12 @@
     var t = ev.target;
     if (t.matches("[data-check]")) {
       setDone(now().dateStr, t.dataset.check, t.checked);
+      render();
+    } else if (t.matches("[data-f30]")) {
+      var r = dayRec(now().dateStr);
+      if (!r.first30) r.first30 = {};
+      if (t.checked) r.first30[t.dataset.f30] = true; else delete r.first30[t.dataset.f30];
+      save();
       render();
     } else if (t.matches("[data-mdone]")) {
       var parts = t.dataset.mdone.split("|");
