@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Study Routine</title>
+  <meta name="description" content="My daily study routine: what to do now, today's timeline, weekly timetable and monthly roadmap topics.">
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <h1 class="brand">Study Routine</h1>
+      <div class="clock" id="clock" aria-live="off"></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="screen-now" class="screen" aria-label="Now"></section>
+    <section id="screen-today" class="screen" aria-label="Today" hidden></section>
+    <section id="screen-week" class="screen" aria-label="Week" hidden></section>
+    <section id="screen-month" class="screen" aria-label="This month" hidden></section>
+    <section id="screen-settings" class="screen" aria-label="Settings" hidden></section>
+  </main>
+
+  <nav class="tabbar" aria-label="Screens">
+    <button type="button" data-screen="now" aria-current="page"><span class="ico" aria-hidden="true">◉</span>Now</button>
+    <button type="button" data-screen="today"><span class="ico" aria-hidden="true">☰</span>Today</button>
+    <button type="button" data-screen="week"><span class="ico" aria-hidden="true">▦</span>Week</button>
+    <button type="button" data-screen="month"><span class="ico" aria-hidden="true">◐</span>Month</button>
+    <button type="button" data-screen="settings"><span class="ico" aria-hidden="true">⚙</span>Settings</button>
+  </nav>
+
+  <dialog id="editor" aria-labelledby="editor-title">
+    <form id="editor-form" method="dialog" novalidate>
+      <h2 id="editor-title">Edit block</h2>
+      <p class="muted small" id="editor-note"></p>
+      <div class="row2">
+        <label>Start<input type="time" name="start" required></label>
+        <label>End<input type="time" name="end" required></label>
+      </div>
+      <fieldset class="days">
+        <legend>Weekdays</legend>
+        <div class="daypicks" id="editor-days"></div>
+      </fieldset>
+      <label>Lane<select name="lane" id="editor-lane"></select></label>
+      <label>Title<input type="text" name="title" required maxlength="120"></label>
+      <label>Details<textarea name="details" rows="3" maxlength="500"></textarea></label>
+      <label class="check"><input type="checkbox" name="optional"> Optional (doesn't count toward the streak)</label>
+      <div class="msg error" id="editor-errors" role="alert"></div>
+      <div class="msg warn" id="editor-warn" aria-live="polite"></div>
+      <div class="dup" id="editor-dup" hidden>
+        <p class="small">Copy this block to:</p>
+        <div class="daypicks" id="editor-dup-days"></div>
+        <button type="button" class="btn" id="editor-dup-go">Create copy</button>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn primary" value="save" id="editor-save">Save</button>
+        <button type="button" class="btn" id="editor-dup-toggle">Duplicate to other days</button>
+        <button type="button" class="btn danger" id="editor-delete">Delete</button>
+        <button type="button" class="btn ghost" id="editor-cancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="logic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
