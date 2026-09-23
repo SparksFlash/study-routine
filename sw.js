@@ -2,13 +2,16 @@
  * Network first (so a new deploy shows up right away), cached copy when offline.
  * Bump VERSION when the list of files changes.
  */
-var VERSION = "v2";
+var VERSION = "v3";
 var CACHE = "study-routine-" + VERSION;
 var FILES = [
   "./",
   "index.html",
   "styles.css",
   "fonts/inter-latin.woff2",
+  "fonts/lilita-one-latin.woff2",
+  "arena3d.js",
+  "vendor/three.module.min.js",
   "data.js",
   "logic.js",
   "app.js",

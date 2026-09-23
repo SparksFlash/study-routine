@@ -204,11 +204,29 @@
     eq(r.current, 2); eq(r.longest, 4);
   });
 
+  // ---------- Trophy Road
+  test("Trophy Road: skins unlock at 3 / 7 / 14 / 30 days", function () {
+    eq(Object.keys(SR.skinFor(2)).length, 0);
+    ok(SR.skinFor(3).star && !SR.skinFor(3).gold);
+    ok(SR.skinFor(7).gold && !SR.skinFor(7).crown);
+    ok(SR.skinFor(30).crown && SR.skinFor(30).aura && !SR.skinFor(30).blaze);
+    eq(SR.nextMilestone(0).days, 1); eq(SR.nextMilestone(7).days, 14); eq(SR.nextMilestone(100), null);
+  });
+
   // ---------- state + editor validation
   test("Broken or empty storage falls back to the default routine", function () {
     eq(SR.normalizeState(null).blocks.length, S.blocks.length);
     eq(SR.normalizeState("garbage").blocks.length, S.blocks.length);
     eq(SR.normalizeState({ blocks: [{ id: 1 }] }).blocks.length, S.blocks.length);
+  });
+  test("Look settings survive save/load; bad values fall back to defaults", function () {
+    var st = SR.defaultState();
+    eq(st.settings.theme, "arena"); eq(st.settings.three, true);
+    st.settings = { theme: "classic", three: false };
+    var back = SR.normalizeState(JSON.parse(JSON.stringify(st)));
+    eq(back.settings.theme, "classic"); eq(back.settings.three, false);
+    var bad = SR.normalizeState({ blocks: st.blocks, settings: { theme: "neon", three: "yes" } });
+    eq(bad.settings.theme, "arena"); eq(bad.settings.three, true);
   });
   test("Editor: end must be after start; overlaps are reported", function () {
     ok(SR.validateBlock({ start: "10:00", end: "09:00", days: [0], title: "x" }).length === 1);

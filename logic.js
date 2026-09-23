@@ -163,7 +163,8 @@
       blocks: clone(DATA.BLOCKS),
       plans: clone(DATA.PLANS),
       days: {},      // "YYYY-MM-DD": { mode, done: {blockId: true}, first30: {index: true} }
-      monthDone: {}  // "YYYY-MM": { index: true }
+      monthDone: {}, // "YYYY-MM": { index: true }
+      settings: { theme: "arena", three: true }
     };
   }
 
@@ -193,6 +194,10 @@
     }
     if (raw.days && typeof raw.days === "object") s.days = clone(raw.days);
     if (raw.monthDone && typeof raw.monthDone === "object") s.monthDone = clone(raw.monthDone);
+    if (raw.settings && typeof raw.settings === "object") {
+      if (raw.settings.theme === "arena" || raw.settings.theme === "classic") s.settings.theme = raw.settings.theme;
+      if (typeof raw.settings.three === "boolean") s.settings.three = raw.settings.three;
+    }
     return s;
   }
 
@@ -261,6 +266,29 @@
       }
     });
     return { current: current, longest: Math.max(longest, current) };
+  }
+
+  // ---------- Trophy Road: best-streak milestones unlock mascot upgrades
+
+  var MILESTONES = [
+    { days: 1, reward: "First win" },
+    { days: 3, reward: "Star badge", skin: "star" },
+    { days: 7, reward: "Gold gear", skin: "gold" },
+    { days: 14, reward: "Crown", skin: "crown" },
+    { days: 30, reward: "Power aura", skin: "aura" },
+    { days: 60, reward: "Blazing aura", skin: "blaze" },
+    { days: 100, reward: "Diamond orbit", skin: "diamond" }
+  ];
+
+  function skinFor(best) {
+    var skin = {};
+    MILESTONES.forEach(function (m) { if (m.skin && best >= m.days) skin[m.skin] = true; });
+    return skin;
+  }
+
+  function nextMilestone(best) {
+    for (var i = 0; i < MILESTONES.length; i++) if (MILESTONES[i].days > best) return MILESTONES[i];
+    return null;
   }
 
   // ---------- .ics export
@@ -365,6 +393,7 @@
     defaultState: defaultState, normalizeState: normalizeState, validBlock: validBlock,
     validateBlock: validateBlock, overlaps: overlaps,
     countable: countable, dayScore: dayScore, streaks: streaks,
+    MILESTONES: MILESTONES, skinFor: skinFor, nextMilestone: nextMilestone,
     icsEscape: icsEscape, foldLine: foldLine, nextSunday: nextSunday, buildICS: buildICS
   };
 });

@@ -19,7 +19,8 @@ A small web app for your phone and laptop. It shows what you should be doing rig
 | `logic.js` | Time zone, current/next block, streak, `.ics` export (no UI) |
 | `data.js` | Default routine, short plans, monthly topics, first 30 days |
 | `manifest.webmanifest`, `sw.js`, `icons/` | What makes it installable and work offline |
-| `fonts/` | Inter typeface, served from the app so it works offline (SIL Open Font License) |
+| `fonts/` | Inter and Lilita One typefaces, served from the app so they work offline (SIL Open Font License) |
+| `arena3d.js`, `vendor/three.module.min.js` | The 3D mascot (Three.js, MIT licence). Loaded only when the mascot is on. |
 | `tests.html`, `tests.js` | Tests |
 | `.github/workflows/pages.yml` | Publishes the app to GitHub Pages automatically |
 
@@ -39,7 +40,7 @@ python -m http.server 8000
 
 Then open <http://localhost:8000> in your browser. Press `Ctrl+C` in the terminal to stop.
 
-**Run the tests:** open <http://localhost:8000/tests.html> (or double-click `tests.html`). It should say **33 / 33 passed**. You can also run `node tests.js`.
+**Run the tests:** open <http://localhost:8000/tests.html> (or double-click `tests.html`). It should say **35 / 35 passed**. You can also run `node tests.js`.
 
 **Preview another time:** add `?now=` to the address, for example <http://localhost:8000/?now=2026-09-27T20:44>. The app then acts as if it's that time in Dhaka. You can also open a screen directly: `#today`, `#week`, `#month`, `#settings`.
 
@@ -160,6 +161,20 @@ Importing **replaces** everything on that device, including routine edits, ticks
 - **Editing:** you can change the start/end time, weekdays, lane, title, details and "optional". If the end time is before the start time, the app won't save. If the block overlaps another one, it warns you but still saves. **Duplicate to other days** makes a copy on the weekdays you pick. A block that repeats on several days is one block, so an edit changes all of those days.
 - **Month:** each lane's topic, the LeetCode target (total solved) and the "Done when" checklist for that month. Use ‹ › to look at other months. September 2026 shows Phase 0. May to September 2028 reuse the April 2028 plan.
 - **Settings:** class times per weekday, short-plan start times, `.ics` export, and export/import/reset of your data.
+
+### Looks, mascot and Trophy Road
+
+- **Two themes** (Settings → Look): **Arena** is a bold, game-style look and the default. **Classic** is the clean light/dark look, which follows your phone's dark-mode setting.
+- **3D mascot** on the Now screen. It wears a different outfit for each lane, for example a sword for DSA, headphones for IELTS and a hard hat for Project. It has pyjamas and a nightcap at sleep time. Tap it to make it jump and talk; drag it sideways to spin it. On a computer, it turns its head to follow your mouse. You can turn it off in Settings to save battery. It doesn't appear when you open `index.html` by double-clicking, because the browser blocks the 3D file there. Use the online link or `python -m http.server`.
+- **Trophy Road** (Today screen): your best streak unlocks mascot upgrades: Star badge (3 days), Gold gear (7), Crown (14), Power aura (30), Blazing aura (60) and Diamond orbit (100).
+- **Celebrations:** confetti and a mascot jump when you mark the current block done. A bigger burst plays when the day reaches 70% and counts toward your streak. On Android, ticking a box gives a short vibration.
+- The characters and art are original, drawn in code. The app doesn't use any images, models or names from a commercial game.
+
+### Phone and computer
+
+- **Phone:** swipe left or right to move between screens. The editor opens as a sheet from the bottom.
+- **Computer (1024 px and wider):** the menu moves to a sidebar, and Now and Today use two columns. The Week grid shows all 7 days at once, and you can **drag a block up or down with the mouse** to move it in 5-minute steps. The move applies to every weekday that block repeats on.
+- **Keyboard shortcuts:** `1`–`5` switch screens, `D` marks the current block done, `A` adds a block, `←` `→` change the month on the Month screen, and `?` lists the shortcuts.
 
 ### Changes I made to your seed routine
 

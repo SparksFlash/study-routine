@@ -90,6 +90,7 @@
       if (b.dataset.screen === name) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
     });
     try { sessionStorage.setItem("sr.screen", name); } catch (e) { /* ignore */ }
+    if (arena && name !== "now") arena.setActive(false);
     render();
     window.scrollTo(0, 0);
   }
@@ -125,6 +126,122 @@
     return '<div class="page-head"><div><p class="eyebrow">' + esc(eyebrow) + '</p><h2 class="page-title">' + title + "</h2></div>" + (right || "") + "</div>";
   }
 
+  // ---------- 3D mascot (arena3d.js, loaded only when needed)
+  var stage = document.createElement("div");
+  stage.className = "arena-stage";
+  stage.innerHTML = '<div class="arena-bubble" hidden></div>';
+  var arena = null, arenaLoading = false, arenaFailed = false, arenaInfo = null;
+  var reducedMotion = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  function wantArena() { return state.settings.three && !arenaFailed; }
+
+  function syncArena() {
+    if (!wantArena()) { if (arena) arena.setActive(false); return; }
+    if (!arena) {
+      if (arenaLoading) return;
+      arenaLoading = true;
+      import("./arena3d.js").then(function (m) {
+        arena = m.createArena(stage, { reducedMotion: reducedMotion, onTap: mascotTap });
+        arenaLoading = false;
+        syncArena();
+      }).catch(function () {
+        // No WebGL, or opened as a file: carry on without the mascot.
+        arenaFailed = true;
+        arenaLoading = false;
+        render();
+      });
+      return;
+    }
+    if (arenaInfo) arena.show(arenaInfo);
+    arena.setActive(current === "now" && stage.isConnected);
+  }
+
+  var QUIPS = ["Let's go!", "Focus mode: ON", "One block at a time.", "You've got this!", "No zero days.", "Future you says thanks.", "Stay on the road!"];
+  var bubbleTimer;
+  function mascotTap() {
+    buzz(12);
+    var p = now();
+    var nn = currentNowNext(p);
+    var line;
+    if (nn.status === "sleep") line = "Zzz… go to sleep!";
+    else if (nn.status === "block" && Math.random() < 0.5) line = dur(SR.toMin(nn.current.end) - p.minutes) + " left — keep going!";
+    else line = QUIPS[Math.floor(Math.random() * QUIPS.length)];
+    var bub = stage.querySelector(".arena-bubble");
+    bub.textContent = line;
+    bub.hidden = false;
+    bub.classList.remove("pop");
+    void bub.offsetWidth;
+    bub.classList.add("pop");
+    clearTimeout(bubbleTimer);
+    bubbleTimer = setTimeout(function () { bub.hidden = true; }, 2200);
+  }
+
+  function currentNowNext(p) {
+    var mode = modeFor(p.dateStr);
+    return SR.findNowNext(SR.blocksForDay(state, p.dow, mode),
+      SR.blocksForDay(state, (p.dow + 1) % 7, modeFor(SR.addDays(p.dateStr, 1))), p.minutes);
+  }
+
+  // ---------- small delights: vibration + confetti
+  function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) { /* ignore */ } }
+
+  var confettiCanvas = null;
+  function confetti(count) {
+    if (reducedMotion) return;
+    if (!confettiCanvas) {
+      confettiCanvas = document.createElement("canvas");
+      confettiCanvas.className = "confetti";
+      confettiCanvas.setAttribute("aria-hidden", "true");
+      document.body.appendChild(confettiCanvas);
+    }
+    var c = confettiCanvas, ctx = c.getContext("2d");
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var colors = ["#ffd23f", "#3b82f6", "#22c55e", "#f97316", "#8b5cf6", "#ec4899", "#14b8a6"];
+    var parts = [];
+    for (var i = 0; i < count; i++) {
+      parts.push({
+        x: innerWidth / 2 + (Math.random() - 0.5) * 80, y: innerHeight * 0.35,
+        vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 13 - 4,
+        r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.4,
+        w: 6 + Math.random() * 6, h: 8 + Math.random() * 8, c: colors[i % colors.length]
+      });
+    }
+    var start = performance.now();
+    (function frame(t) {
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      var alive = false;
+      parts.forEach(function (q) {
+        q.vy += 0.45; q.vx *= 0.99; q.x += q.vx; q.y += q.vy; q.r += q.vr;
+        if (q.y < innerHeight + 20) alive = true;
+        ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r);
+        ctx.fillStyle = q.c; ctx.fillRect(-q.w / 2, -q.h / 2, q.w, q.h * Math.abs(Math.cos(q.r)));
+        ctx.restore();
+      });
+      if (alive && t - start < 3500) requestAnimationFrame(frame);
+      else ctx.clearRect(0, 0, innerWidth, innerHeight);
+    })(start);
+  }
+
+  // Tick/untick a block, with feedback. A big celebration when the day starts counting toward the streak.
+  function toggleDone(id, value, source) {
+    var p = now();
+    var before = SR.dayScore(state, p.dateStr).qualifies;
+    setDone(p.dateStr, id, value);
+    if (!value) return;
+    buzz(15);
+    var after = SR.dayScore(state, p.dateStr).qualifies;
+    if (!before && after) {
+      confetti(160);
+      if (arena) arena.celebrate();
+      toast("Streak day secured! 🔥");
+    } else if (source === "hero") {
+      confetti(60);
+      if (arena) arena.celebrate();
+    }
+  }
+
   // ---------- Now screen
   SCREENS.now = function (root, p) {
     var mode = modeFor(p.dateStr);
@@ -132,7 +249,8 @@
     var today = SR.blocksForDay(state, p.dow, mode);
     var tomorrow = SR.blocksForDay(state, (p.dow + 1) % 7, modeFor(tomorrowStr));
     var nn = SR.findNowNext(today, tomorrow, p.minutes);
-    var html = "";
+    var st = SR.streaks(state, p.dateStr);
+    var html = '<div class="cols"><div class="col-a">';
 
     if (mode !== "normal") {
       html += '<p class="notice">' + icon("bolt") + "<span>Running the <strong>" + esc(state.plans[mode].label) + "</strong> today. Switch it on the Today screen.</span></p>";
@@ -143,6 +261,7 @@
       var pct = Math.min(100, Math.max(0, ((p.minutes - s) / (e - s)) * 100));
       var topic = SR.laneTopic(p.monthKey, b.lane);
       var done = isDone(p.dateStr, b.id);
+      html += arenaHtml(b.lane, laneLabel(b.lane), "Now playing");
       html += '<article class="hero lane-' + esc(b.lane) + (done ? " is-done" : "") + '">' +
         '<div class="hero-head"><span class="live"><span class="live-dot"></span>Now</span>' + chip(b.lane) + "</div>" +
         '<h2 class="hero-title">' + esc(b.title) + "</h2>" +
@@ -160,6 +279,7 @@
     } else if (nn.status === "sleep") {
       var sleepBlk = nn.current;
       var slept = sleepBlk && isDone(p.dateStr, sleepBlk.id);
+      html += arenaHtml("routine", "Sleeping", "Recharging", "sleep");
       html += '<article class="hero hero-night">' +
         '<div class="hero-head"><span class="live"><span class="live-dot"></span>Now</span><span class="night-tag">Routine</span></div>' +
         '<div class="night-icon">' + icon("moon") + "</div>" +
@@ -169,6 +289,7 @@
           icon("check") + (slept ? "In bed — tap to undo" : "I'm in bed") + "</button>" : "") +
         "</article>";
     } else {
+      html += arenaHtml("routine", "Free time", "Taking a break");
       html += '<article class="hero hero-free">' +
         '<div class="hero-head"><span class="live"><span class="live-dot"></span>Now</span>' + chip("routine") + "</div>" +
         '<div class="night-icon">' + icon("cup") + "</div>" +
@@ -177,6 +298,7 @@
         "</article>";
     }
 
+    html += '</div><div class="col-b">';
     if (nn.next) {
       var n = nn.next;
       html += '<article class="next lane-' + esc(n.lane) + '">' +
@@ -187,14 +309,40 @@
         "</article>";
     }
 
-    var st = SR.streaks(state, p.dateStr);
     var score = SR.dayScore(state, p.dateStr);
     html += '<div class="mini-stats">' +
       '<div class="mini">' + icon("flame", "c-flame") + "<div><strong>" + st.current + "</strong><span>day streak</span></div></div>" +
       '<div class="mini">' + icon("target", "c-accent") + "<div><strong>" + Math.round(score.ratio * 100) + "%</strong><span>of today done</span></div></div>" +
       "</div>";
+
+    // Later today: the few blocks after "next".
+    var later = today.filter(function (b) { return SR.toMin(b.start) > p.minutes && b !== nn.next; }).slice(0, 4);
+    if (later.length && !nn.nextIsTomorrow) {
+      html += '<article class="card later"><h3 class="card-title">' + icon("today") + "Later today</h3><ul>" +
+        later.map(function (b) {
+          return '<li class="lane-' + esc(b.lane) + '"><span class="later-time">' + esc(b.start) + '</span><span class="later-dot"></span><span class="later-title">' + esc(b.title) + "</span></li>";
+        }).join("") + "</ul></article>";
+    }
+    html += "</div></div>";
     root.innerHTML = html;
+
+    // Move the persistent 3D stage into this render (keeps the WebGL context alive).
+    var slot = root.querySelector(".arena-slot");
+    if (slot) {
+      slot.appendChild(stage);
+      var info = slot.parentNode.dataset;
+      arenaInfo = { lane: info.lane, mood: info.mood, skin: SR.skinFor(st.longest) };
+    }
+    syncArena();
   };
+
+  function arenaHtml(lane, title, eyebrow, mood) {
+    if (!wantArena()) return "";
+    return '<section class="arena lane-' + esc(lane) + '" data-lane="' + esc(lane) + '" data-mood="' + (mood || "work") + '" aria-label="Mascot">' +
+      '<div class="arena-slot"></div>' +
+      '<div class="arena-sign"><span class="eyebrow">' + esc(eyebrow) + "</span><strong>" + esc(title) + "</strong></div>" +
+      '<p class="arena-hint">Tap me · drag to spin</p></section>';
+  }
 
   // ---------- Today screen
   var MODES = [["normal", "Normal"], ["three", "3-hour plan"], ["one", "1-hour day"]];
@@ -217,6 +365,7 @@
         '<p class="small muted">The ' + esc(state.plans[mode].label) + " replaces today's timeline. Tick every item to keep your streak.</p></div>";
     }
 
+    html += '<div class="cols"><div class="col-a">';
     html += streakHtml(p);
 
     html += '<ol class="timeline" aria-label="Today\'s blocks">';
@@ -238,7 +387,7 @@
     });
     html += "</ol>";
     if (mode === "normal") html += '<p class="hint">Tap a block to edit it. A block that repeats on several weekdays changes on all of them.</p>';
-    html += first30Html(p) + heatmapHtml(p);
+    html += '</div><div class="col-b">' + trophyHtml(p) + first30Html(p) + heatmapHtml(p) + "</div></div>";
     root.innerHTML = html;
   };
 
@@ -248,7 +397,7 @@
   SCREENS.week = function (root, p) {
     var h = (WK_END - WK_START) * PX;
     var html = pageHead("Timetable", "Week", '<button type="button" class="btn small primary" data-add="' + p.dow + '">' + icon("plus") + "Add block</button>");
-    html += '<p class="hint">Tap any block to edit it. Swipe sideways to see every day.</p>';
+    html += '<p class="hint">Tap a block to edit it. With a mouse, drag a block up or down to move it.</p>';
     html += '<div class="week-wrap"><div class="week" role="grid" aria-label="Weekly timetable">';
     html += '<div class="wk-head" aria-hidden="true"></div>';
     D.WEEKDAYS.forEach(function (d, i) {
@@ -470,7 +619,15 @@
   }
 
   SCREENS.settings = function (root, p) {
-    var html = pageHead("Preferences", "Settings");
+    var html = pageHead("Preferences", "Settings") + '<div class="settings-grid">';
+
+    html += '<article class="card"><h3 class="card-title">' + icon("bolt") + "Look</h3>" +
+      '<div class="seg seg-2" role="group" aria-label="Theme">' +
+      '<button type="button" data-theme="arena" aria-pressed="' + (state.settings.theme === "arena") + '">Arena</button>' +
+      '<button type="button" data-theme="classic" aria-pressed="' + (state.settings.theme === "classic") + '">Classic</button></div>' +
+      '<label class="check"><input type="checkbox" id="three-toggle"' + (state.settings.three ? " checked" : "") + "> 3D mascot on the Now screen</label>" +
+      '<p class="small muted">' + (arenaFailed ? "3D isn't available on this device or when the app is opened as a file." :
+        "Your mascot changes with the lane you're working on and gets upgrades from Trophy Road. Turn it off to save battery.") + "</p></article>";
 
     html += '<article class="card"><h3 class="card-title">' + icon("school") + "University class times</h3>" +
       '<p class="small muted">Tick the days you have classes. Other blocks are not moved automatically — check the Week screen for overlaps.</p>' +
@@ -501,6 +658,12 @@
       '<input type="file" id="json-file" accept=".json,application/json" hidden>' +
       '<button type="button" class="btn danger" id="reset">Reset to default</button></div></article>';
 
+    html += '<article class="card desktop-only"><h3 class="card-title">' + icon("settings") + "Keyboard shortcuts</h3>" +
+      '<ul class="keys">' + [["1 – 5", "Switch screens"], ["D", "Mark the current block done"], ["A", "Add a block"],
+        ["← →", "Previous / next month (Month screen)"], ["?", "Show shortcuts"]].map(function (k) {
+        return "<li><kbd>" + k[0] + "</kbd><span>" + k[1] + "</span></li>";
+      }).join("") + "</ul></article>";
+    html += "</div>";
     html += '<p class="tiny muted">All times are Asia/Dhaka (UTC+6). Tip: add ?now=2026-09-27T20:44 to the address to preview another time.</p>';
     root.innerHTML = html;
   };
@@ -538,6 +701,11 @@
       });
       save();
       toast("Class times saved");
+      render();
+    } else if (ev.target.closest("[data-theme]")) {
+      state.settings.theme = ev.target.closest("[data-theme]").dataset.theme;
+      save();
+      applyLook();
       render();
     } else if (id === "ics-export") {
       var start = $("#ics-start").value;
@@ -579,6 +747,10 @@
       reader.onerror = function () { toast("Couldn't read that file."); };
       reader.readAsText(t.files[0]);
       t.value = "";
+    } else if (t.id === "three-toggle") {
+      state.settings.three = t.checked;
+      save();
+      toast(t.checked ? "3D mascot on" : "3D mascot off");
     } else if (t.matches("[data-planstart]") && SR.isTime(t.value)) {
       state.plans[t.dataset.planstart].start = t.value;
       save();
@@ -613,6 +785,23 @@
       }).join("") + "</div></div></article>";
   }
 
+  function trophyHtml(p) {
+    var best = SR.streaks(state, p.dateStr).longest;
+    var next = SR.nextMilestone(best);
+    return '<article class="card trophy"><div class="card-head"><h3 class="card-title">' + icon("trophy") + "Trophy Road</h3>" +
+      '<span class="small muted">Best: ' + best + " day" + (best === 1 ? "" : "s") + "</span></div>" +
+      '<ol class="road">' + SR.MILESTONES.map(function (m) {
+        var got = best >= m.days;
+        return '<li class="road-node' + (got ? " got" : "") + (next === m ? " is-next" : "") + '">' +
+          '<span class="road-badge">' + (got ? icon("check") : m.days) + "</span>" +
+          '<span class="road-days">' + m.days + "d</span>" +
+          '<span class="road-reward">' + esc(m.reward) + "</span></li>";
+      }).join("") + "</ol>" +
+      '<p class="small muted">' + (next
+        ? "<strong>" + (next.days - best) + " more streak day" + (next.days - best === 1 ? "" : "s") + "</strong> to unlock " + esc(next.reward) + ". Rewards upgrade your mascot on the Now screen."
+        : "Every reward unlocked. Legendary.") + "</p></article>";
+  }
+
   function heatmapHtml(p) {
     var thisSunday = SR.addDays(p.dateStr, -p.dow);
     var start = SR.addDays(thisSunday, -7 * 11);
@@ -634,8 +823,7 @@
   document.addEventListener("click", function (ev) {
     var t = ev.target.closest("[data-done]");
     if (t) {
-      var p = now();
-      setDone(p.dateStr, t.dataset.done, !isDone(p.dateStr, t.dataset.done));
+      toggleDone(t.dataset.done, !isDone(now().dateStr, t.dataset.done), "hero");
       render();
       return;
     }
@@ -660,7 +848,7 @@
   document.addEventListener("change", function (ev) {
     var t = ev.target;
     if (t.matches("[data-check]")) {
-      setDone(now().dateStr, t.dataset.check, t.checked);
+      toggleDone(t.dataset.check, t.checked, "tick");
       render();
     } else if (t.matches("[data-f30]")) {
       var r = dayRec(now().dateStr);
@@ -684,6 +872,92 @@
     b.addEventListener("click", function () { show(b.dataset.screen); });
   });
 
+  // ---------- theme
+  function applyLook() {
+    var arenaTheme = state.settings.theme === "arena";
+    document.documentElement.classList.toggle("theme-arena", arenaTheme);
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+      m.setAttribute("content", arenaTheme ? "#1b3fb5" : (m.media.indexOf("dark") !== -1 ? "#0b0d12" : "#f3f4f8"));
+    });
+  }
+
+  // ---------- keyboard shortcuts (computer)
+  var ORDER = ["now", "today", "week", "month", "settings"];
+  document.addEventListener("keydown", function (ev) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || $("#editor").open) return;
+    if (/INPUT|SELECT|TEXTAREA/.test((ev.target && ev.target.tagName) || "")) return;
+    var k = ev.key;
+    if (k >= "1" && k <= "5") { show(ORDER[+k - 1]); return; }
+    if (k === "d" || k === "D") {
+      var nn = currentNowNext(now());
+      if (nn.current) {
+        toggleDone(nn.current.id, !isDone(now().dateStr, nn.current.id), "hero");
+        toast(isDone(now().dateStr, nn.current.id) ? "Done: " + nn.current.title : "Unticked: " + nn.current.title);
+        render();
+      }
+      return;
+    }
+    if (k === "a" || k === "A") { ev.preventDefault(); openEditor(null, now().dow); return; }
+    if (current === "month" && (k === "ArrowLeft" || k === "ArrowRight")) { monthOffset += k === "ArrowLeft" ? -1 : 1; render(); return; }
+    if (k === "?") toast("Keys: 1–5 screens · D done · A add block · ←/→ months");
+  });
+
+  // ---------- swipe left/right between screens (phone)
+  var touch = null;
+  $("#main").addEventListener("touchstart", function (ev) {
+    if (ev.touches.length !== 1 || ev.target.closest(".week-wrap, .arena, .road, input, textarea, select")) { touch = null; return; }
+    touch = { x: ev.touches[0].clientX, y: ev.touches[0].clientY, t: Date.now() };
+  }, { passive: true });
+  $("#main").addEventListener("touchend", function (ev) {
+    if (!touch) return;
+    var dx = ev.changedTouches[0].clientX - touch.x, dy = ev.changedTouches[0].clientY - touch.y;
+    var fast = Date.now() - touch.t < 600;
+    touch = null;
+    if (!fast || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    var i = ORDER.indexOf(current) + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i < ORDER.length) show(ORDER[i]);
+  }, { passive: true });
+
+  // ---------- Week grid: drag a block with the mouse to move it (5-minute steps)
+  var drag = null, swallowClick = false;
+  document.addEventListener("pointerdown", function (ev) {
+    var el = ev.target.closest(".wk-block");
+    if (!el || ev.pointerType !== "mouse" || ev.button !== 0) return;
+    var b = state.blocks.filter(function (x) { return x.id === el.dataset.edit; })[0];
+    if (!b) return;
+    drag = { el: el, block: b, y: ev.clientY, top: parseFloat(el.style.top), moved: false, delta: 0 };
+  });
+  document.addEventListener("pointermove", function (ev) {
+    if (!drag) return;
+    var dy = ev.clientY - drag.y;
+    if (!drag.moved && Math.abs(dy) < 5) return;
+    drag.moved = true;
+    var s = SR.toMin(drag.block.start), e = SR.toMin(drag.block.end);
+    var delta = Math.round(dy / PX / 5) * 5;
+    delta = Math.max(-s, Math.min(1439 - e, delta));
+    drag.delta = delta;
+    drag.el.style.top = (drag.top + delta * PX) + "px";
+    drag.el.classList.add("dragging");
+    drag.el.querySelector(".wt").textContent = SR.fromMin(s + delta) + " " + drag.block.title;
+  });
+  document.addEventListener("pointerup", function () {
+    if (!drag) return;
+    var d = drag;
+    drag = null;
+    if (!d.moved) return;
+    swallowClick = true;
+    if (!d.delta) { render(); return; }
+    d.block.start = SR.fromMin(SR.toMin(d.block.start) + d.delta);
+    d.block.end = SR.fromMin(SR.toMin(d.block.end) + d.delta);
+    save();
+    var ov = SR.overlaps(state.blocks, d.block);
+    toast("Moved to " + d.block.start + "–" + d.block.end + (ov.length ? " (overlaps " + ov[0].title + ")" : ""));
+    render();
+  });
+  document.addEventListener("click", function (ev) {
+    if (swallowClick) { swallowClick = false; ev.stopPropagation(); ev.preventDefault(); }
+  }, true);
+
   // ---------- offline support (only works over http/https, not when opened as a file)
   if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
     window.addEventListener("load", function () {
@@ -693,6 +967,7 @@
 
   // ---------- start
   load();
+  applyLook();
   var startScreen = "now";
   try { startScreen = sessionStorage.getItem("sr.screen") || "now"; } catch (e) { /* ignore */ }
   if (SCREENS[location.hash.slice(1)]) startScreen = location.hash.slice(1); // e.g. index.html#today
