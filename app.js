@@ -160,12 +160,80 @@
     root.innerHTML = html;
   };
 
+  // ---------- Today screen
+  var MODES = [["normal", "Normal"], ["three", "3-hour plan"], ["one", "1-hour minimum day"]];
+
+  SCREENS.today = function (root, p) {
+    var mode = modeFor(p.dateStr);
+    var blocks = SR.blocksForDay(state, p.dow, mode);
+    var tomorrow = SR.blocksForDay(state, (p.dow + 1) % 7, modeFor(SR.addDays(p.dateStr, 1)));
+    var nn = SR.findNowNext(blocks, tomorrow, p.minutes);
+    var html = "";
+
+    html += '<div class="card-head"><h2>' + esc(prettyDate(p.dateStr)) + "</h2></div>";
+    html += '<div class="seg" role="group" aria-label="Day plan">' + MODES.map(function (m) {
+      return '<button type="button" data-mode="' + m[0] + '" aria-pressed="' + (mode === m[0]) + '">' + m[1] + "</button>";
+    }).join("") + "</div>";
+
+    if (mode !== "normal") {
+      html += '<div class="card"><label>Plan start time<input type="time" id="plan-start" value="' + esc(state.plans[mode].start) + '"></label>' +
+        '<p class="small muted">The ' + esc(state.plans[mode].label) + " replaces today's timeline. Tick every item to keep your streak.</p></div>";
+    }
+
+    html += streakHtml(p);
+
+    html += '<ol class="timeline" aria-label="Today\'s blocks">';
+    blocks.forEach(function (b) {
+      var done = isDone(p.dateStr, b.id);
+      var isCur = nn.current === b;
+      var past = SR.toMin(b.end) <= p.minutes;
+      var cls = "tl-row" + (isCur ? " current" : "") + (done ? " done" : "") + (past ? " past" : "");
+      html += '<li class="' + cls + '">' +
+        '<span class="tl-check"><input type="checkbox" data-check="' + esc(b.id) + '"' + (done ? " checked" : "") +
+        ' aria-label="Done: ' + esc(b.title) + '"></span>' +
+        '<button type="button" class="tl-item lane-' + esc(b.lane) + '"' + (b.plan ? "" : ' data-edit="' + esc(b.id) + '"') + ">" +
+        '<span class="top"><span class="time">' + range(b) + "</span>" +
+        (isCur ? '<span class="now-tag">NOW</span>' : "") + chip(b.lane) + "</span>" +
+        '<span class="t">' + esc(b.title) + (b.optional ? " <span class=\"tiny\">(optional)</span>" : "") + "</span>" +
+        (b.details ? '<span class="d">' + esc(b.details) + "</span>" : "") +
+        "</button></li>";
+    });
+    html += "</ol>";
+    if (mode === "normal") html += '<p class="small muted">Tap a block to edit it. Edits apply to every weekday the block repeats on.</p>';
+    html += first30Html(p) + heatmapHtml(p);
+    root.innerHTML = html;
+  };
+
+  // Filled in by later sections.
+  function streakHtml() { return ""; }
+  function first30Html() { return ""; }
+  function heatmapHtml() { return ""; }
+
   // ---------- events
   document.addEventListener("click", function (ev) {
     var t = ev.target.closest("[data-done]");
     if (t) {
       var p = now();
       setDone(p.dateStr, t.dataset.done, !isDone(p.dateStr, t.dataset.done));
+      render();
+      return;
+    }
+    var m = ev.target.closest("[data-mode]");
+    if (m) {
+      var r = dayRec(now().dateStr);
+      if (m.dataset.mode === "normal") delete r.mode; else r.mode = m.dataset.mode;
+      save();
+      render();
+    }
+  });
+  document.addEventListener("change", function (ev) {
+    var t = ev.target;
+    if (t.matches("[data-check]")) {
+      setDone(now().dateStr, t.dataset.check, t.checked);
+      render();
+    } else if (t.id === "plan-start" && SR.isTime(t.value)) {
+      state.plans[modeFor(now().dateStr)].start = t.value;
+      save();
       render();
     }
   });
@@ -178,6 +246,15 @@
   var startScreen = "now";
   try { startScreen = sessionStorage.getItem("sr.screen") || "now"; } catch (e) { /* ignore */ }
   show(SCREENS[startScreen] ? startScreen : "now");
-  setInterval(function () { if (current === "now") render(); else $("#clock").textContent = D.WEEKDAYS[now().dow] + " " + SR.pad(now().hh) + ":" + SR.pad(now().mm) + " · Dhaka"; }, 15000);
+  // Refresh every 15 s. Screens with inputs only re-render when the minute changes and nothing is focused/open.
+  var lastMinute = -1;
+  setInterval(function () {
+    var p = now();
+    var minute = p.hh * 60 + p.mm;
+    var busy = $("#editor").open || (document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName));
+    if (current === "now") render();
+    else if (minute !== lastMinute && !busy) render();
+    lastMinute = minute;
+  }, 15000);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) render(); });
 })();
