@@ -199,10 +199,158 @@
         "</button></li>";
     });
     html += "</ol>";
-    if (mode === "normal") html += '<p class="small muted">Tap a block to edit it. Edits apply to every weekday the block repeats on.</p>';
+    if (mode === "normal") {
+      html += '<div class="btn-row"><button type="button" class="btn small" data-add="' + p.dow + '">+ Add block</button></div>' +
+        '<p class="small muted">Tap a block to edit it. Edits apply to every weekday the block repeats on.</p>';
+    }
     html += first30Html(p) + heatmapHtml(p);
     root.innerHTML = html;
   };
+
+  // ---------- Week screen (Sun → Sat timetable)
+  var WK_START = 6 * 60, WK_END = 24 * 60, PX = 1.05; // px per minute
+
+  SCREENS.week = function (root, p) {
+    var h = (WK_END - WK_START) * PX;
+    var html = '<div class="card-head"><h2>Week</h2><button type="button" class="btn small primary" data-add="' + p.dow + '">+ Add block</button></div>';
+    html += '<p class="small muted">Tap any block to edit it. Scroll sideways on a phone.</p>';
+    html += '<div class="week-wrap"><div class="week" role="grid" aria-label="Weekly timetable">';
+    html += '<div class="wk-head" aria-hidden="true"></div>';
+    D.WEEKDAYS.forEach(function (d, i) {
+      html += '<div class="wk-head' + (i === p.dow ? " today" : "") + '">' + d + "</div>";
+    });
+    html += '<div class="wk-axis" style="height:' + h + 'px" aria-hidden="true">';
+    for (var m = WK_START; m < WK_END; m += 60) {
+      if (m > WK_START) html += '<span class="lbl" style="top:' + (m - WK_START) * PX + 'px">' + SR.pad(m / 60) + ":00</span>";
+    }
+    html += "</div>";
+    for (var dow = 0; dow < 7; dow++) {
+      html += '<div class="wk-col' + (dow === p.dow ? " today" : "") + '" style="height:' + h + 'px">';
+      for (var hm = WK_START + 60; hm < WK_END; hm += 60) html += '<span class="wk-hour" style="top:' + (hm - WK_START) * PX + 'px"></span>';
+      SR.blocksForDay(state, dow, "normal").forEach(function (b) {
+        var s = Math.max(SR.toMin(b.start), WK_START), e = Math.min(SR.toMin(b.end), WK_END);
+        if (e <= s) return;
+        html += '<button type="button" class="wk-block lane-' + esc(b.lane) + (b.optional ? " optional" : "") + '" data-edit="' + esc(b.id) + '"' +
+          ' style="top:' + ((s - WK_START) * PX).toFixed(1) + "px;height:" + Math.max(16, (e - s) * PX - 2).toFixed(1) + 'px"' +
+          ' aria-label="' + esc(D.WEEKDAYS_LONG[dow] + " " + b.start + " to " + b.end + ", " + laneLabel(b.lane) + ": " + b.title) + '">' +
+          '<span class="wt">' + esc(b.start) + " " + esc(b.title) + "</span>" +
+          (e - s >= 40 ? '<span class="wl">' + esc(laneLabel(b.lane)) + "</span>" : "") +
+          "</button>";
+      });
+      if (dow === p.dow && p.minutes >= WK_START) html += '<span class="wk-now" style="top:' + ((p.minutes - WK_START) * PX).toFixed(1) + 'px"></span>';
+      html += "</div>";
+    }
+    html += "</div></div>";
+    html += '<div class="legend-lanes" aria-label="Lanes">' + Object.keys(D.LANES).map(chip).join("") + "</div>";
+    root.innerHTML = html;
+  };
+
+  // ---------- block editor
+  var editing = null; // { id|null, draft }
+  var ed = $("#editor"), edForm = $("#editor-form");
+
+  function dayPicks(container, name, selected) {
+    container.innerHTML = D.WEEKDAYS.map(function (d, i) {
+      return '<label><input type="checkbox" name="' + name + '" value="' + i + '"' + (selected.indexOf(i) !== -1 ? " checked" : "") + "> " + d + "</label>";
+    }).join("");
+  }
+  $("#editor-lane").innerHTML = Object.keys(D.LANES).map(function (k) {
+    return '<option value="' + k + '">' + esc(D.LANES[k].label) + "</option>";
+  }).join("");
+
+  function readForm() {
+    var f = edForm.elements;
+    var days = Array.prototype.filter.call(edForm.querySelectorAll('input[name="day"]'), function (c) { return c.checked; })
+      .map(function (c) { return +c.value; });
+    var base = editing.id ? state.blocks.filter(function (b) { return b.id === editing.id; })[0] : {};
+    var b = SR.clone(base || {});
+    b.id = editing.id || "b-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    b.start = f.start.value; b.end = f.end.value; b.days = days;
+    b.lane = f.lane.value; b.title = f.title.value.trim(); b.details = f.details.value.trim();
+    if (f.optional.checked) b.optional = true; else delete b.optional;
+    return b;
+  }
+
+  function checkForm() {
+    var b = readForm();
+    var errs = SR.validateBlock(b);
+    $("#editor-errors").textContent = errs.join(" ");
+    var ov = errs.length ? [] : SR.overlaps(state.blocks, b);
+    $("#editor-warn").textContent = ov.length
+      ? "Heads up: overlaps with " + ov.slice(0, 3).map(function (o) { return o.title + " (" + o.start + "–" + o.end + ")"; }).join(", ") +
+        (ov.length > 3 ? " and " + (ov.length - 3) + " more" : "") + ". You can still save."
+      : "";
+    return { block: b, errors: errs, overlaps: ov };
+  }
+
+  function openEditor(id, defaultDay) {
+    var b = id ? state.blocks.filter(function (x) { return x.id === id; })[0] : null;
+    if (id && !b) return;
+    editing = { id: id || null };
+    var f = edForm.elements;
+    b = b || { start: "18:00", end: "19:00", days: [defaultDay == null ? now().dow : defaultDay], lane: "project", title: "", details: "" };
+    $("#editor-title").textContent = id ? "Edit block" : "Add block";
+    f.start.value = b.start; f.end.value = b.end;
+    f.lane.value = b.lane; f.title.value = b.title; f.details.value = b.details || "";
+    f.optional.checked = !!b.optional;
+    dayPicks($("#editor-days"), "day", b.days);
+    dayPicks($("#editor-dup-days"), "dupday", []);
+    $("#editor-dup").hidden = true;
+    $("#editor-delete").hidden = !id;
+    $("#editor-dup-toggle").hidden = !id;
+    $("#editor-note").textContent = id && b.days.length > 1
+      ? "Repeats on " + b.days.map(function (d) { return D.WEEKDAYS[d]; }).join(", ") + ". Changes apply to all of these days."
+      : "";
+    checkForm();
+    $("#editor-errors").textContent = "";
+    if (typeof ed.showModal === "function") ed.showModal(); else ed.setAttribute("open", "");
+  }
+  function closeEditor() {
+    if (typeof ed.close === "function") ed.close(); else ed.removeAttribute("open");
+    editing = null;
+  }
+
+  edForm.addEventListener("input", checkForm);
+  edForm.addEventListener("change", checkForm);
+  edForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var r = checkForm();
+    if (r.errors.length) return;
+    var idx = state.blocks.map(function (b) { return b.id; }).indexOf(r.block.id);
+    if (idx === -1) state.blocks.push(r.block); else state.blocks[idx] = r.block;
+    save();
+    closeEditor();
+    toast(r.overlaps.length ? "Saved (overlaps with " + r.overlaps[0].title + ")" : "Saved");
+    render();
+  });
+  $("#editor-cancel").addEventListener("click", closeEditor);
+  $("#editor-delete").addEventListener("click", function () {
+    if (!editing || !editing.id) return;
+    var b = state.blocks.filter(function (x) { return x.id === editing.id; })[0];
+    if (!confirm('Delete "' + b.title + '" from ' + b.days.map(function (d) { return D.WEEKDAYS[d]; }).join(", ") + "?")) return;
+    state.blocks = state.blocks.filter(function (x) { return x.id !== editing.id; });
+    save();
+    closeEditor();
+    toast("Deleted");
+    render();
+  });
+  $("#editor-dup-toggle").addEventListener("click", function () { $("#editor-dup").hidden = !$("#editor-dup").hidden; });
+  $("#editor-dup-go").addEventListener("click", function () {
+    var days = Array.prototype.filter.call(edForm.querySelectorAll('input[name="dupday"]'), function (c) { return c.checked; })
+      .map(function (c) { return +c.value; });
+    if (!days.length) { $("#editor-errors").textContent = "Pick at least one day to copy to."; return; }
+    var r = checkForm();
+    if (r.errors.length && !(r.errors.length === 1 && !r.block.days.length)) return;
+    var copy = SR.clone(r.block);
+    copy.id = "b-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    copy.days = days;
+    delete copy.kind;
+    state.blocks.push(copy);
+    save();
+    closeEditor();
+    toast("Copied to " + days.map(function (d) { return D.WEEKDAYS[d]; }).join(", "));
+    render();
+  });
 
   // Filled in by later sections.
   function streakHtml() { return ""; }
@@ -218,6 +366,10 @@
       render();
       return;
     }
+    var e = ev.target.closest("[data-edit]");
+    if (e) { openEditor(e.dataset.edit); return; }
+    var a = ev.target.closest("[data-add]");
+    if (a) { openEditor(null, +a.dataset.add); return; }
     var m = ev.target.closest("[data-mode]");
     if (m) {
       var r = dayRec(now().dateStr);
