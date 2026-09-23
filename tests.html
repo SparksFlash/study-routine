@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Study Routine Tests</title>
+  <style>
+    :root { color-scheme: light dark; --bg: #fff; --text: #16181d; --good: #146c2e; --bad: #b42318; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #14161a; --text: #e9ebef; --good: #6fdc8c; --bad: #ff8a80; } }
+    body { background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, sans-serif; margin: 0 auto; padding: 16px; max-width: 760px; }
+    ul { padding-left: 0; list-style: none; }
+    li { padding: 2px 0; }
+    .pass, .good { color: var(--good); }
+    .fail, .bad { color: var(--bad); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Study Routine — tests</h1>
+  <p id="summary">Running…</p>
+  <ul id="results"></ul>
+  <p><a href="./">← Back to the app</a></p>
+  <script src="data.js"></script>
+  <script src="logic.js"></script>
+  <script src="tests.js"></script>
+</body>
+</html>
